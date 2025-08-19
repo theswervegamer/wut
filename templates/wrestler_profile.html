@@ -2,6 +2,14 @@
 {% block content %}
   <h2>{{ wrestler.name }}</h2>
 
+  <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:12px;">
+    {% if wrestler.photo %}
+      <img src="{{ wrestler.photo }}" alt="{{ wrestler.name }} photo" class="profile-photo" />
+    {% else %}
+     <div style="width:var(--photo-size); height:var(--photo-size); border:1px dashed var(--line); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted);">No photo</div>
+    {% endif %}
+  </div>
+
   <table>
     <tbody>
       <tr>
@@ -18,9 +26,23 @@
           {% if not teams %}
             <span class="muted">None</span>
           {% else %}
-            <ul style="margin:0; padding-left:18px">
+            <ul style="margin:0; padding-left:0; list-style:none">
               {% for t in teams %}
                 <li>{{ t.name }} <span class="muted">({{ t.status }})</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Factions</th>
+        <td>
+          {% if not factions %}
+            <span class="muted">None</span>
+          {% else %}
+            <ul style="margin:0; padding-left:0; list-style:none">
+              {% for f in factions %}
+                <li>{{ f.name }} <span class="muted">({{ f.status }})</span></li>
               {% endfor %}
             </ul>
           {% endif %}
@@ -31,7 +53,6 @@
 
   <p style="margin-top:16px">
     <a class="btn" href="/roster">Back to roster</a>
+    <a class="btn" href="/roster/edit/{{ wrestler.id }}">Edit profile</a>
   </p>
-
-  {# Future: matches, promos, titles, earnings, notes, etc. #}
 {% endblock %}

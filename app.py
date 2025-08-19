@@ -4,10 +4,12 @@ from pathlib import Path
 import sqlite3
 from typing import List
 
-from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi import FastAPI, Request, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+
 import uvicorn
 
 APP_DIR = Path(__file__).resolve().parent
@@ -16,6 +18,8 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "wut.db"
 STATIC_DIR = APP_DIR / "static"
 TEMPLATES_DIR = APP_DIR / "templates"
+PHOTOS_DIR = STATIC_DIR / "photos"
+PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Wrestling Universe Tracker")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -137,6 +141,10 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_faction_members_faction ON faction_members(faction_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_faction_members_wrestler ON faction_members(wrestler_id)")
 
+        # Ensure a 'photo' column exists on wrestlers
+        if not _column_exists(conn, "wrestlers", "photo"):
+            conn.execute("ALTER TABLE wrestlers ADD COLUMN photo TEXT")
+
         conn.commit()
     finally:
         conn.close()
@@ -233,10 +241,12 @@ async def roster_add_form(request: Request):
             "active": "roster",
             "heading": "Add Wrestler",
             "action_url": "/roster/add",
-            "form": {"name": "", "gender": "Male", "active": "Yes"},
+            "form": {"name": "", "gender": "Male", "active": "Yes", "photo": None},
+            "allow_photo_upload": False,
             "error": "",
         },
     )
+
 
 
 @app.post("/roster/add", response_class=HTMLResponse, include_in_schema=False)
@@ -295,7 +305,7 @@ async def roster_edit_form(request: Request, wid: int):
     conn = get_conn()
     try:
         row = conn.execute(
-            "SELECT id, name, gender, active FROM wrestlers WHERE id = ?",
+            "SELECT id, name, gender, active, photo FROM wrestlers WHERE id = ?",
             (wid,),
         ).fetchone()
     finally:
@@ -308,6 +318,7 @@ async def roster_edit_form(request: Request, wid: int):
         "name": row["name"],
         "gender": row["gender"],
         "active": "Yes" if row["active"] else "No",
+        "photo": row["photo"],
     }
     return templates.TemplateResponse(
         "roster_form.html",
@@ -317,9 +328,11 @@ async def roster_edit_form(request: Request, wid: int):
             "heading": "Edit Wrestler",
             "action_url": f"/roster/edit/{wid}",
             "form": form,
+            "allow_photo_upload": True,
             "error": "",
         },
     )
+
 
 
 @app.post("/roster/edit/{wid}", response_class=HTMLResponse, include_in_schema=False)
@@ -329,6 +342,7 @@ async def roster_edit_submit(
     name: str = Form(...),
     gender: str = Form(...),
     active: str = Form(...),
+    photo: UploadFile | None = File(None),
 ):
     name = name.strip()
     try:
@@ -343,6 +357,7 @@ async def roster_edit_submit(
                 "heading": "Edit Wrestler",
                 "action_url": f"/roster/edit/{wid}",
                 "form": {"name": name, "gender": gender, "active": active},
+                "allow_photo_upload": True,
                 "error": str(e),
             },
             status_code=400,
@@ -356,6 +371,7 @@ async def roster_edit_submit(
                 "heading": "Edit Wrestler",
                 "action_url": f"/roster/edit/{wid}",
                 "form": {"name": name, "gender": gender, "active": active},
+                "allow_photo_upload": True,
                 "error": "Name is required.",
             },
             status_code=400,
@@ -370,11 +386,48 @@ async def roster_edit_submit(
             "UPDATE wrestlers SET name = ?, gender = ?, active = ? WHERE id = ?",
             (name, gender_n, active_n, wid),
         )
+
+        # Optional photo upload
+        if photo and (photo.filename or "").strip():
+            ct = (photo.content_type or "").lower()
+            allowed = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+            if ct not in allowed:
+                raise HTTPException(status_code=400, detail="Only JPEG/PNG/WebP images are allowed")
+            ext = allowed[ct]
+            filename = f"w{wid}{ext}"
+            dest = PHOTOS_DIR / filename
+
+            max_bytes = 8 * 1024 * 1024
+            written = 0
+            with dest.open("wb") as out:
+                while True:
+                    chunk = await photo.read(1_048_576)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > max_bytes:
+                        out.close()
+                        dest.unlink(missing_ok=True)
+                        raise HTTPException(status_code=413, detail="Image too large (max 8 MB)")
+                    out.write(chunk)
+
+            # Cleanup alternate extensions
+            for old_ext in (".jpg", ".jpeg", ".png", ".webp"):
+                p = PHOTOS_DIR / f"w{wid}{old_ext}"
+                if p.exists() and p.name != filename:
+                    try:
+                        p.unlink()
+                    except Exception:
+                        pass
+
+            web_path = f"/static/photos/{filename}"
+            conn.execute("UPDATE wrestlers SET photo = ? WHERE id = ?", (web_path, wid))
+
         conn.commit()
     finally:
         conn.close()
 
-    return RedirectResponse(url="/roster", status_code=303)
+    return RedirectResponse(url=f"/wrestler/{wid}", status_code=303)
 
 
 @app.post("/roster/delete/{wid}", include_in_schema=False)
@@ -396,11 +449,12 @@ async def wrestler_profile(request: Request, wid: int):
     conn = get_conn()
     try:
         row = conn.execute(
-            "SELECT id, name, gender, active FROM wrestlers WHERE id = ?",
+            "SELECT id, name, gender, active, photo FROM wrestlers WHERE id = ?",
             (wid,),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Wrestler not found")
+
         team_rows = conn.execute(
             """
             SELECT t.id, t.name,
@@ -412,6 +466,18 @@ async def wrestler_profile(request: Request, wid: int):
             """,
             (wid,),
         ).fetchall()
+
+        faction_rows = conn.execute(
+            """
+            SELECT f.id, f.name,
+                   COALESCE(f.status, CASE WHEN f.active=1 THEN 'Active' ELSE 'Inactive' END) AS status
+            FROM factions f
+            JOIN faction_members fm ON fm.faction_id = f.id
+            WHERE fm.wrestler_id = ?
+            ORDER BY f.name
+            """,
+            (wid,),
+        ).fetchall()
     finally:
         conn.close()
 
@@ -420,13 +486,82 @@ async def wrestler_profile(request: Request, wid: int):
         "name": row["name"],
         "gender": row["gender"],
         "active": bool(row["active"]),
+        "photo": row["photo"],  # e.g., '/static/photos/w12.jpg'
     }
     teams = [{"id": r[0], "name": r[1], "status": r[2]} for r in team_rows]
+    factions = [{"id": r[0], "name": r[1], "status": r[2]} for r in faction_rows]
 
     return templates.TemplateResponse(
         "wrestler_profile.html",
-        {"request": request, "active": "roster", "wrestler": wrestler, "teams": teams},
+        {
+            "request": request,
+            "active": "roster",
+            "wrestler": wrestler,
+            "teams": teams,
+            "factions": factions,
+        },
     )
+
+
+
+
+@app.post("/wrestler/{wid}/photo", include_in_schema=False)
+async def wrestler_upload_photo(wid: int, file: UploadFile = File(...)):
+    # Validate wrestler exists
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT id FROM wrestlers WHERE id = ?", (wid,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Wrestler not found")
+    finally:
+        conn.close()
+
+    # Validate file type
+    ct = (file.content_type or "").lower()
+    allowed = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+    if ct not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPEG/PNG/WebP images are allowed")
+    ext = allowed[ct]
+
+    # Save to /static/photos/w{wid}.{ext}
+    filename = f"w{wid}{ext}"
+    dest = PHOTOS_DIR / filename
+
+    # Stream to disk with a simple size cap (~8 MB)
+    max_bytes = 8 * 1024 * 1024
+    written = 0
+    with dest.open("wb") as out:
+        while True:
+            chunk = await file.read(1_048_576)  # 1 MB
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > max_bytes:
+                out.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Image too large (max 8 MB)")
+            out.write(chunk)
+
+    # Remove old files for this wrestler with other extensions
+    for old_ext in (".jpg", ".jpeg", ".png", ".webp"):
+        p = PHOTOS_DIR / f"w{wid}{old_ext}"
+        if p.exists() and p.name != filename:
+            try:
+                p.unlink()
+            except Exception:
+                pass
+
+    # Update DB with web path
+    web_path = f"/static/photos/{filename}"
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE wrestlers SET photo = ? WHERE id = ?", (web_path, wid))
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Redirect back to profile
+    return RedirectResponse(url=f"/wrestler/{wid}", status_code=303)
 
 
 # ---------------- Tag Teams ----------------
