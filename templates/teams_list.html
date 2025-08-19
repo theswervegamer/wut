@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Tag Teams</h2>
+
+  <form method="get" class="filters" id="filters" action="/teams">
+    <input type="text" name="q" placeholder="Search team name" value="{{ filters.q }}">
+    <select name="active">
+      <option value="All" {% if filters.active == 'All' %}selected{% endif %}>All</option>
+      <option value="Yes" {% if filters.active == 'Yes' %}selected{% endif %}>Active: Yes</option>
+      <option value="No"  {% if filters.active == 'No' %}selected{% endif %}>Active: No</option>
+    </select>
+    <a class="btn" href="/teams">Clear</a>
+    <a class="btn" href="/teams/add">Add Tag Team</a>
+  </form>
+
+  {% if not teams %}
+    <p class="empty">No tag teams match your filters.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Members</th>
+          <th>Active</th>
+          <th style="width:220px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in teams %}
+          <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ t.members }}</td>
+            <td>{{ 'Yes' if t.active else 'No' }}</td>
+            <td>
+              <a class="btn btn-small" href="/teams/edit/{{ t.id }}">Edit</a>
+              <form class="inline-form" method="post" action="/teams/delete/{{ t.id }}">
+                <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete team {{ t.name }}?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

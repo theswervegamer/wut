@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ heading or "Add Tag Team" }}</h2>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+  <form method="post" action="{{ action_url or '/teams/add' }}" autocomplete="off">
+    <div class="field">
+      <label for="name">Team Name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}" required
+             autocomplete="off" autocapitalize="none" spellcheck="false"
+             readonly onfocus="this.removeAttribute('readonly');">
+    </div>
+
+    <div class="field">
+      <label for="active">Active</label>
+      <select id="active" name="active">
+        <option value="Yes" {% if form.active == 'Yes' %}selected{% endif %}>Yes</option>
+        <option value="No"  {% if form.active == 'No' %}selected{% endif %}>No</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="members">Members (hold Ctrl/Cmd to select multiple)</label>
+      <select id="members" name="members" multiple size="12">
+        {% for w in all_wrestlers %}
+          <option value="{{ w.id }}" {% if w.id in selected_ids %}selected{% endif %}>{{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <p>
+      <button class="btn" type="submit">Save</button>
+      <a class="btn" href="/teams">Cancel</a>
+    </p>
+  </form>
+{% endblock %}

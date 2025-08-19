@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ request.app.title if request and request.app else 'WUT' }}</title>
+    <link rel="icon" href="/static/favicon.svg">
+    <style>
+      :root { --bg:#000; --fg:#fff; --muted:#9aa0a6; --tab:#222; --tab-hover:#333; --line:#222; --danger:#5a1a1a; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+      .header { display:flex; align-items:center; justify-content:center; gap:12px; padding:12px 16px 4px; }
+      .logo { width:min(60px, 11vw); height:auto; display:block; }
+      .site-title { margin:0; font-size:clamp(18px, 2.4vw, 30px); font-weight:800; letter-spacing:.3px; }
+      .tabs { display:flex; justify-content:center; gap:8px; padding:8px 16px 16px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+      .tab { color:var(--fg); text-decoration:none; padding:8px 14px; border-radius:9999px; border:1px solid transparent; background:transparent; }
+      .tab:hover { background: var(--tab-hover); }
+      .tab.active { background: var(--tab); border-color:#333; }
+      .btn { display:inline-block; padding:8px 12px; border-radius:9999px; border:1px solid var(--line); background: var(--tab); color: var(--fg); text-decoration:none; }
+      .btn:hover { background: var(--tab-hover); }
+      .btn-small { padding:6px 10px; font-size: 0.9rem; }
+      .btn-danger { border-color: var(--danger); background: #2a0f0f; }
+      .btn-danger:hover { background: #3a1515; }
+      main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+      h2 { margin: 0 0 8px; font-weight: 800; }
+      .muted { color: var(--muted); }
+      table { width:100%; border-collapse:collapse; margin-top:12px; }
+      th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align: middle; }
+      th { font-weight:700; }
+      .empty { color:var(--muted); padding:12px 0; }
+      .error { color:#ff6b6b; }
+      form .field { margin-bottom:12px; }
+      label { display:block; margin-bottom:6px; }
+      input[type=text], select { width:100%; padding:10px 12px; background:#0b0b0b; color:var(--fg); border:1px solid var(--line); border-radius:8px; }
+      .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0 12px; }
+      .filters input[type=text] { width: 220px; }
+      .inline-form { display:inline; }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <img class="logo" src="/static/wwe.png" alt="WWE logo" />
+      <h1 class="site-title">Wrestling Universe Tracker</h1>
+    </header>
+    <nav class="tabs">
+      <a class="tab {% if active == 'home' %}active{% endif %}" href="/">Home</a>
+      <a class="tab {% if active == 'roster' %}active{% endif %}" href="/roster">Roster</a>
+      <a class="tab {% if active == 'teams' %}active{% endif %}" href="/teams">Tag Teams</a>
+    </nav>
+
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- Auto-filter script: focus search + debounce typing (800ms) and submit on select change -->
+    <script>
+      (function(){
+        function onReady(fn){ if(document.readyState !== 'loading'){ fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+        onReady(function(){
+          var form = document.querySelector('form#filters');
+          if(!form) return;
+          var q = form.querySelector('input[name="q"]');
+
+          if (q) {
+            try { q.focus({preventScroll:true}); } catch(e) { try { q.focus(); } catch(_) {} }
+            try {
+              var end = q.value.length;
+              (window.requestAnimationFrame || setTimeout)(function(){
+                if (typeof q.setSelectionRange === 'function') q.setSelectionRange(end, end);
+                else { q.selectionStart = q.selectionEnd = end; }
+              }, 0);
+            } catch(e) {}
+          }
+
+          function navigate(){
+            var params = new URLSearchParams(new FormData(form));
+            var base = form.getAttribute('action') || window.location.pathname;
+            if (base.indexOf('?') !== -1) base = base.split('?')[0];
+            var qs = params.toString();
+            window.location.href = base + (qs ? ('?' + qs) : '');
+          }
+
+          var t;
+          if (q) q.addEventListener('input', function(){ clearTimeout(t); t = setTimeout(navigate, 800); });
+          form.querySelectorAll('select').forEach(function(s){ s.addEventListener('change', navigate); });
+        });
+      })();
+    </script>
+  </body>
+</html>

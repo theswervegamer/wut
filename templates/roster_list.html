@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Roster</h2>
+
+<form method="get" class="filters" id="filters" action="/roster">
+  <input type="text" name="q" placeholder="Search name" value="{{ filters.q }}">
+  <select name="gender">
+    <option value="All"   {% if filters.gender == 'All' %}selected{% endif %}>All genders</option>
+    <option value="Male"  {% if filters.gender == 'Male' %}selected{% endif %}>Male</option>
+    <option value="Female"{% if filters.gender == 'Female' %}selected{% endif %}>Female</option>
+  </select>
+  <select name="active">
+    <option value="All" {% if filters.active == 'All' %}selected{% endif %}>All</option>
+    <option value="Yes" {% if filters.active == 'Yes' %}selected{% endif %}>Active: Yes</option>
+    <option value="No"  {% if filters.active == 'No' %}selected{% endif %}>Active: No</option>
+  </select>
+  <a class="btn" href="/roster">Clear</a>
+  <a class="btn" href="/roster/add">Add Wrestler</a>
+</form>
+
+  {% if not wrestlers %}
+    <p class="empty">No wrestlers match your filters.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Gender</th><th>Active</th><th style="width:200px">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for w in wrestlers %}
+          <tr>
+            <td>{{ w.name }}</td>
+            <td>{{ w.gender }}</td>
+            <td>{{ 'Yes' if w.active else 'No' }}</td>
+            <td>
+              <a class="btn btn-small" href="/roster/edit/{{ w.id }}">Edit</a>
+              <form class="inline-form" method="post" action="/roster/delete/{{ w.id }}">
+                <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete {{ w.name }}?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.log
+
+# Virtual env
+.venv/
+
+# Editor
+.vscode/
+
+# Local databases
+data/*.db*
+data/*.sqlite*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
