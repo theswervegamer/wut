@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Factions</h2>
+
+  <form method="get" class="filters" id="filters" action="/factions">
+    <input type="text" name="q" placeholder="Search faction name" value="{{ filters.q }}">
+    <select name="status">
+      <option value="All" {% if filters.status == 'All' %}selected{% endif %}>All</option>
+      <option value="Active" {% if filters.status == 'Active' %}selected{% endif %}>Active</option>
+      <option value="Inactive" {% if filters.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+      <option value="Disbanded" {% if filters.status == 'Disbanded' %}selected{% endif %}>Disbanded</option>
+    </select>
+    <a class="btn" href="/factions">Clear</a>
+    <a class="btn" href="/factions/add">Add Faction</a>
+  </form>
+
+  {% if not factions %}
+    <p class="empty">No factions match your filters.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Members</th>
+          <th>Status</th>
+          <th style="width:220px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in factions %}
+          <tr>
+            <td>{{ f.name }}</td>
+            <td>{{ f.members }}</td>
+            <td>{{ f.status }}</td>
+            <td>
+              <a class="btn btn-small" href="/factions/edit/{{ f.id }}">Edit</a>
+              <form class="inline-form" method="post" action="/factions/delete/{{ f.id }}">
+                <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete faction {{ f.name }}?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ heading or "Add Faction" }}</h2>
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+  <form method="post" action="{{ action_url or '/factions/add' }}">
+    <div class="field">
+      <label for="name">Faction Name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}" required
+             autocomplete="off" autocapitalize="none" spellcheck="false"
+             readonly onfocus="this.removeAttribute('readonly');">
+    </div>
+
+    <div class="field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="Active"     {% if form.status == 'Active' %}selected{% endif %}>Active</option>
+        <option value="Inactive"   {% if form.status == 'Inactive' %}selected{% endif %}>Inactive</option>
+        <option value="Disbanded"  {% if form.status == 'Disbanded' %}selected{% endif %}>Disbanded</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="members">Members (2–10) — hold Ctrl/Cmd to select multiple</label>
+      <select id="members" name="members" multiple size="12">
+        {% for w in all_wrestlers %}
+          <option value="{{ w.id }}" {% if w.id in selected_ids %}selected{% endif %}>{{ w.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <p>
+      <button class="btn" type="submit">Save</button>
+      <a class="btn" href="/factions">Cancel</a>
+    </p>
+  </form>
+{% endblock %}

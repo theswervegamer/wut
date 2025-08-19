@@ -34,31 +34,51 @@ def get_conn() -> sqlite3.Connection:
         pass
     return conn
 
+# If you DON'T already have this helper, add it just above init_db()
+# def _column_exists(c: sqlite3.Connection, table: str, col: str) -> bool:
+#     return any(r[1] == col for r in c.execute(f"PRAGMA table_info({table})"))
+
+def _column_exists(c: sqlite3.Connection, table: str, col: str) -> bool:
+    return any(r[1] == col for r in c.execute(f"PRAGMA table_info({table})"))
+
 
 def init_db() -> None:
     conn = get_conn()
     try:
-        # Singles roster
+        # Wrestlers (singles)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS wrestlers (
               id      INTEGER PRIMARY KEY AUTOINCREMENT,
               name    TEXT NOT NULL,
               gender  TEXT CHECK(gender IN ('Male','Female')) NOT NULL,
-              active  INTEGER NOT NULL  -- 1=yes, 0=no
+              active  INTEGER NOT NULL
             );
             """
         )
-        # Tag teams
+
+        # Tag teams + membership
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tag_teams (
               id      INTEGER PRIMARY KEY AUTOINCREMENT,
               name    TEXT NOT NULL UNIQUE,
-              active  INTEGER NOT NULL  -- 1=yes, 0=no
+              active  INTEGER NOT NULL,
+              status  TEXT DEFAULT 'Active'
             );
             """
         )
+        # Migration: ensure status exists/backfill from active
+        if not _column_exists(conn, "tag_teams", "status"):
+            conn.execute("ALTER TABLE tag_teams ADD COLUMN status TEXT DEFAULT 'Active'")
+            conn.execute(
+                """
+                UPDATE tag_teams
+                SET status = CASE WHEN COALESCE(active,1)=1 THEN 'Active' ELSE 'Inactive' END
+                WHERE status IS NULL
+                """
+            )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tag_team_members (
@@ -70,13 +90,53 @@ def init_db() -> None:
             );
             """
         )
-        # Helpful indexes for speed
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_wrestlers_name   ON wrestlers(name)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_wrestlers_active ON wrestlers(active)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_teams_name   ON tag_teams(name)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_teams_active ON tag_teams(active)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_team_members_team    ON tag_team_members(team_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_team_members_wrestler ON tag_team_members(wrestler_id)")
+
+        # Factions (mixed gender) + membership
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS factions (
+              id      INTEGER PRIMARY KEY AUTOINCREMENT,
+              name    TEXT NOT NULL UNIQUE,
+              active  INTEGER NOT NULL,
+              status  TEXT DEFAULT 'Active'
+            );
+            """
+        )
+        # Migration: ensure status exists/backfill
+        if not _column_exists(conn, "factions", "status"):
+            conn.execute("ALTER TABLE factions ADD COLUMN status TEXT DEFAULT 'Active'")
+            conn.execute(
+                """
+                UPDATE factions
+                SET status = CASE WHEN COALESCE(active,1)=1 THEN 'Active' ELSE 'Inactive' END
+                WHERE status IS NULL
+                """
+            )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS faction_members (
+              faction_id  INTEGER NOT NULL,
+              wrestler_id INTEGER NOT NULL,
+              PRIMARY KEY(faction_id, wrestler_id),
+              FOREIGN KEY(faction_id)  REFERENCES factions(id)   ON DELETE CASCADE,
+              FOREIGN KEY(wrestler_id) REFERENCES wrestlers(id) ON DELETE RESTRICT
+            );
+            """
+        )
+
+        # Indexes (idempotent)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wrestlers_name          ON wrestlers(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wrestlers_active        ON wrestlers(active)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_teams_name          ON tag_teams(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_teams_active        ON tag_teams(active)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_team_members_team       ON tag_team_members(team_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_team_members_wrestler   ON tag_team_members(wrestler_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_factions_name           ON factions(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_factions_active         ON factions(active)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_faction_members_faction ON faction_members(faction_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_faction_members_wrestler ON faction_members(wrestler_id)")
+
         conn.commit()
     finally:
         conn.close()
@@ -661,6 +721,235 @@ async def teams_delete(tid: int):
     finally:
         conn.close()
     return RedirectResponse(url="/teams", status_code=303)
+
+# --- ADD below Tag Teams routes ---
+from typing import List
+from fastapi import Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+@app.get("/factions", response_class=HTMLResponse, include_in_schema=False)
+async def factions_list(request: Request):
+    q = (request.query_params.get("q") or "").strip()
+    status = (request.query_params.get("status") or "All")
+
+    conditions: List[str] = []
+    params: List[object] = []
+    if q:
+        conditions.append("f.name LIKE ? COLLATE NOCASE")
+        params.append(f"%{q}%")
+    if status in ("Active", "Inactive", "Disbanded"):
+        conditions.append("f.status = ?")
+        params.append(status)
+
+    sql = (
+        "SELECT f.id, f.name, f.status, "
+        "GROUP_CONCAT(w.name, ', ') AS members "
+        "FROM factions f "
+        "LEFT JOIN faction_members fm ON fm.faction_id = f.id "
+        "LEFT JOIN wrestlers w       ON w.id = fm.wrestler_id "
+    )
+    if conditions:
+        sql += "WHERE " + " AND ".join(conditions) + " "
+    sql += "GROUP BY f.id ORDER BY f.name"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+
+    factions = [{
+        "id": r["id"],
+        "name": r["name"],
+        "status": r["status"] or "Inactive",
+        "members": r["members"] or "",
+    } for r in rows]
+
+    return templates.TemplateResponse(
+        "factions_list.html",
+        {"request": request, "active": "factions", "factions": factions,
+         "filters": {"q": q, "status": status}},
+    )
+
+
+@app.get("/factions/add", response_class=HTMLResponse, include_in_schema=False)
+async def factions_add_form(request: Request):
+    conn = get_conn()
+    try:
+        wrestlers = conn.execute("SELECT id, name FROM wrestlers ORDER BY name").fetchall()
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        "faction_form.html",
+        {"request": request, "active": "factions",
+         "heading": "Add Faction", "action_url": "/factions/add",
+         "form": {"name": "", "status": "Active"},
+         "all_wrestlers": [{"id": w["id"], "name": w["name"]} for w in wrestlers],
+         "selected_ids": [], "error": ""},
+    )
+
+
+@app.post("/factions/add", response_class=HTMLResponse, include_in_schema=False)
+async def factions_add_submit(
+    request: Request,
+    name: str = Form(...),
+    status: str = Form(...),
+    members: List[int] = Form([]),
+):
+    name = name.strip()
+    status = (status or "").strip().title()
+    member_ids = list(dict.fromkeys(members))
+
+    err = ""
+    if status not in {"Active", "Inactive", "Disbanded"}:
+        err = "Status must be Active, Inactive or Disbanded."
+    elif not name:
+        err = "Faction name is required."
+    elif len(member_ids) < 2 or len(member_ids) > 10:
+        err = "Select between 2 and 10 members."
+
+    conn = get_conn()
+    try:
+        if not err:
+            cur = conn.execute("SELECT id FROM factions WHERE name = ? COLLATE NOCASE", (name,))
+            if cur.fetchone():
+                err = "A faction with that name already exists."
+
+        if err:
+            wrestlers = conn.execute("SELECT id, name FROM wrestlers ORDER BY name").fetchall()
+            return templates.TemplateResponse(
+                "faction_form.html",
+                {"request": request, "active": "factions",
+                 "heading": "Add Faction", "action_url": "/factions/add",
+                 "form": {"name": name, "status": status},
+                 "all_wrestlers": [{"id": w["id"], "name": w["name"]} for w in wrestlers],
+                 "selected_ids": member_ids, "error": err},
+                status_code=400,
+            )
+
+        active_int = 1 if status == "Active" else 0
+        cur = conn.execute(
+            "INSERT INTO factions(name, active, status) VALUES (?,?,?)",
+            (name, active_int, status),
+        )
+        fid = cur.lastrowid
+        if member_ids:
+            conn.executemany(
+                "INSERT INTO faction_members(faction_id, wrestler_id) VALUES (?,?)",
+                [(fid, wid) for wid in member_ids],
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url="/factions", status_code=303)
+
+
+@app.get("/factions/edit/{fid}", response_class=HTMLResponse, include_in_schema=False)
+async def factions_edit_form(request: Request, fid: int):
+    conn = get_conn()
+    try:
+        faction = conn.execute(
+            "SELECT id, name, active, status FROM factions WHERE id = ?",
+            (fid,),
+        ).fetchone()
+        if not faction:
+            raise HTTPException(status_code=404, detail="Faction not found")
+        wrestlers = conn.execute("SELECT id, name FROM wrestlers ORDER BY name").fetchall()
+        selected = conn.execute(
+            "SELECT wrestler_id FROM faction_members WHERE faction_id = ? ORDER BY wrestler_id",
+            (fid,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    selected_ids = [r[0] for r in selected]
+    status_val = faction["status"] or ("Active" if faction["active"] else "Inactive")
+
+    return templates.TemplateResponse(
+        "faction_form.html",
+        {"request": request, "active": "factions",
+         "heading": "Edit Faction", "action_url": f"/factions/edit/{fid}",
+         "form": {"name": faction["name"], "status": status_val},
+         "all_wrestlers": [{"id": w["id"], "name": w["name"]} for w in wrestlers],
+         "selected_ids": selected_ids, "error": ""},
+    )
+
+
+@app.post("/factions/edit/{fid}", response_class=HTMLResponse, include_in_schema=False)
+async def factions_edit_submit(
+    request: Request,
+    fid: int,
+    name: str = Form(...),
+    status: str = Form(...),
+    members: List[int] = Form([]),
+):
+    name = name.strip()
+    status = (status or "").strip().title()
+    member_ids = list(dict.fromkeys(members))
+
+    err = ""
+    if status not in {"Active", "Inactive", "Disbanded"}:
+        err = "Status must be Active, Inactive or Disbanded."
+    elif not name:
+        err = "Faction name is required."
+    elif len(member_ids) < 2 or len(member_ids) > 10:
+        err = "Select between 2 and 10 members."
+
+    conn = get_conn()
+    try:
+        if not err:
+            cur = conn.execute(
+                "SELECT id FROM factions WHERE name = ? COLLATE NOCASE AND id <> ?",
+                (name, fid),
+            )
+            if cur.fetchone():
+                err = "Another faction with that name already exists."
+
+        if err:
+            wrestlers = conn.execute("SELECT id, name FROM wrestlers ORDER BY name").fetchall()
+            return templates.TemplateResponse(
+                "faction_form.html",
+                {"request": request, "active": "factions",
+                 "heading": "Edit Faction", "action_url": f"/factions/edit/{fid}",
+                 "form": {"name": name, "status": status},
+                 "all_wrestlers": [{"id": w["id"], "name": w["name"]} for w in wrestlers],
+                 "selected_ids": member_ids, "error": err},
+                status_code=400,
+            )
+
+        active_int = 1 if status == "Active" else 0
+        cur = conn.execute("SELECT 1 FROM factions WHERE id = ?", (fid,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Faction not found")
+        conn.execute(
+            "UPDATE factions SET name = ?, active = ?, status = ? WHERE id = ?",
+            (name, active_int, status, fid),
+        )
+        conn.execute("DELETE FROM faction_members WHERE faction_id = ?", (fid,))
+        if member_ids:
+            conn.executemany(
+                "INSERT INTO faction_members(faction_id, wrestler_id) VALUES (?,?)",
+                [(fid, wid) for wid in member_ids],
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url="/factions", status_code=303)
+
+
+@app.post("/factions/delete/{fid}", include_in_schema=False)
+async def factions_delete(fid: int):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM faction_members WHERE faction_id = ?", (fid,))
+        conn.execute("DELETE FROM factions WHERE id = ?", (fid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return RedirectResponse(url="/factions", status_code=303)
 
 
 if __name__ == "__main__":
