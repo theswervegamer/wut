@@ -327,6 +327,47 @@ async def roster_delete(wid: int):
         conn.close()
     return RedirectResponse(url="/roster", status_code=303)
 
+# --- roster profile page config ---
+from fastapi.responses import HTMLResponse
+from fastapi import HTTPException, Request
+
+@app.get("/wrestler/{wid}", response_class=HTMLResponse, include_in_schema=False)
+async def wrestler_profile(request: Request, wid: int):
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT id, name, gender, active FROM wrestlers WHERE id = ?",
+            (wid,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Wrestler not found")
+        team_rows = conn.execute(
+            """
+            SELECT t.id, t.name,
+                   COALESCE(t.status, CASE WHEN t.active=1 THEN 'Active' ELSE 'Inactive' END) AS status
+            FROM tag_teams t
+            JOIN tag_team_members m ON m.team_id = t.id
+            WHERE m.wrestler_id = ?
+            ORDER BY t.name
+            """,
+            (wid,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    wrestler = {
+        "id": row["id"],
+        "name": row["name"],
+        "gender": row["gender"],
+        "active": bool(row["active"]),
+    }
+    teams = [{"id": r[0], "name": r[1], "status": r[2]} for r in team_rows]
+
+    return templates.TemplateResponse(
+        "wrestler_profile.html",
+        {"request": request, "active": "roster", "wrestler": wrestler, "teams": teams},
+    )
+
 
 # ---------------- Tag Teams ----------------
 

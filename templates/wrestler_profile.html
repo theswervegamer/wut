@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ wrestler.name }}</h2>
+
+  <table>
+    <tbody>
+      <tr>
+        <th style="width:140px">Gender</th>
+        <td>{{ wrestler.gender }}</td>
+      </tr>
+      <tr>
+        <th>Active</th>
+        <td>{{ 'Yes' if wrestler.active else 'No' }}</td>
+      </tr>
+      <tr>
+        <th>Tag Teams</th>
+        <td>
+          {% if not teams %}
+            <span class="muted">None</span>
+          {% else %}
+            <ul style="margin:0; padding-left:18px">
+              {% for t in teams %}
+                <li>{{ t.name }} <span class="muted">({{ t.status }})</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:16px">
+    <a class="btn" href="/roster">Back to roster</a>
+  </p>
+
+  {# Future: matches, promos, titles, earnings, notes, etc. #}
+{% endblock %}

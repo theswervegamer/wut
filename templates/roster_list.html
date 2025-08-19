@@ -28,7 +28,7 @@
       <tbody>
         {% for w in wrestlers %}
           <tr>
-            <td>{{ w.name }}</td>
+            <td><a class="plain-link" href="/wrestler/{{ w.id }}" aria-label="View {{ w.name }} profile">{{ w.name }}</a></td>
             <td>{{ w.gender }}</td>
             <td>{{ 'Yes' if w.active else 'No' }}</td>
             <td>
