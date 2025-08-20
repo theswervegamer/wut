@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Match History</h1>
+
+  <form method="get" action="/matches" style="display:grid; gap:0.5rem; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items:end; margin-bottom:1rem;">
+    <label>
+      <div>Season</div>
+      <select name="season">
+        <option value="">All</option>
+        {% for s in seasons %}
+          <option value="{{ s }}" {% if selected.season==s %}selected{% endif %}>S{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      <div>Tournament</div>
+      <select name="tournament">
+        <option value="">All</option>
+        {% for t in tournaments %}
+          <option value="{{ t }}" {% if selected.tournament==t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      <div>Competitor (name contains)</div>
+      <input type="text" name="competitor" value="{{ selected.competitor }}" placeholder="e.g. Cena or The Usos" />
+    </label>
+
+    <div>
+      <button type="submit">Filter</button>
+      <a href="/matches" style="margin-left:0.5rem;">Reset</a>
+    </div>
+  </form>
+
+  {% if selected.wid %}
+    <p>Filtering for wrestler ID: <code>{{ selected.wid }}</code></p>
+  {% endif %}
+
+  {% if matches|length == 0 %}
+    <p>No matches found.</p>
+  {% else %}
+    <table border="1" cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="width:5rem;">Season</th>
+          <th>Tournament</th>
+          <th>Round</th>
+          <th>Competitor 1</th>
+          <th>Competitor 2</th>
+          <th>Winner</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in matches %}
+          {% set winner_name = (m.comp1_name if m.winner_side==1 else (m.comp2_name if m.winner_side==2 else '—')) %}
+          <tr>
+            <td>S{{ m.season }}</td>
+            <td>{{ m.tournament }}</td>
+            <td>{{ m.round }}</td>
+            <td>
+              {{ m.comp1_name }}
+              <small>({{ m.comp1_kind }})</small>
+            </td>
+            <td>
+              {{ m.comp2_name }}
+              <small>({{ m.comp2_kind }})</small>
+            </td>
+            <td><strong>{{ winner_name }}</strong></td>
+            <td>{{ m.match_time_display or '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

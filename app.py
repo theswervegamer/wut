@@ -1844,5 +1844,221 @@ def _refresh_wrestler_cache() -> None:
     }
 
 
+# === Paste this block near the bottom of app.py (after `app = FastAPI(...)`) ===
+# It adds: matches table (ID-based), per-wrestler view, and /matches page with filters.
+
+from typing import Optional, List, Dict
+import os
+import sqlite3
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+router = APIRouter()
+TEMPLATES = Jinja2Templates(directory="templates")
+
+
+def get_db() -> sqlite3.Connection:
+    os.makedirs("data", exist_ok=True)
+    conn = sqlite3.connect("data/wut.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+
+# Replace the entire ensure_matches_schema() function in app.py with this version.
+
+def ensure_matches_schema(conn: sqlite3.Connection) -> None:
+    """Create/upgrade the matches table and the per-wrestler view.
+    Adds hidden ordering fields: day_index (universe day) and order_in_day.
+    """
+    # Base table (creates if missing; existing tables are left as-is)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            season INTEGER NOT NULL,
+            tournament TEXT NOT NULL,
+            round TEXT NOT NULL,
+            comp1_kind TEXT NOT NULL CHECK (comp1_kind IN ('Wrestler','Team')),
+            comp1_id INTEGER NOT NULL,
+            comp1_name TEXT NOT NULL,
+            comp2_kind TEXT NOT NULL CHECK (comp2_kind IN ('Wrestler','Team')),
+            comp2_id INTEGER NOT NULL,
+            comp2_name TEXT NOT NULL,
+            winner_side INTEGER NULL CHECK (winner_side IN (1,2)),
+            match_time_seconds INTEGER NULL,
+            -- New hidden ordering fields
+            day_index INTEGER NULL,          -- Universe day (1..N). Hidden in UI.
+            order_in_day INTEGER NULL,       -- Order within the day (1..n). Hidden in UI.
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+
+    # Minimal, safe migration for older DBs: add columns if missing
+    cols = {row[1] for row in conn.execute("PRAGMA table_info('matches')").fetchall()}
+    if 'day_index' not in cols:
+        conn.execute("ALTER TABLE matches ADD COLUMN day_index INTEGER")
+    if 'order_in_day' not in cols:
+        conn.execute("ALTER TABLE matches ADD COLUMN order_in_day INTEGER")
+
+    # Helpful indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_season ON matches(season);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_comp_ids ON matches(comp1_id, comp2_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_day ON matches(day_index, order_in_day);")
+
+    # Rebuild view to ensure it exists
+    conn.execute("DROP VIEW IF EXISTS match_wrestlers_view;")
+    conn.execute(
+        """
+        CREATE VIEW match_wrestlers_view AS
+        -- Side 1: wrestler
+        SELECT m.id AS match_id, m.season, m.tournament, m.round,
+               1 AS side, w.id AS wrestler_id, w.name AS wrestler_name,
+               CASE WHEN m.winner_side = 1 THEN 1 ELSE 0 END AS won
+        FROM matches m
+        JOIN wrestlers w ON w.id = m.comp1_id
+        WHERE m.comp1_kind = 'Wrestler'
+
+        UNION ALL
+        -- Side 1: team → expand to current members
+        SELECT m.id AS match_id, m.season, m.tournament, m.round,
+               1 AS side, tm.wrestler_id AS wrestler_id, w.name AS wrestler_name,
+               CASE WHEN m.winner_side = 1 THEN 1 ELSE 0 END AS won
+        FROM matches m
+        JOIN tag_team_members tm ON tm.team_id = m.comp1_id
+        JOIN wrestlers w ON w.id = tm.wrestler_id
+        WHERE m.comp1_kind = 'Team'
+
+        UNION ALL
+        -- Side 2: wrestler
+        SELECT m.id AS match_id, m.season, m.tournament, m.round,
+               2 AS side, w.id AS wrestler_id, w.name AS wrestler_name,
+               CASE WHEN m.winner_side = 2 THEN 1 ELSE 0 END AS won
+        FROM matches m
+        JOIN wrestlers w ON w.id = m.comp2_id
+        WHERE m.comp2_kind = 'Wrestler'
+
+        UNION ALL
+        -- Side 2: team → expand to current members
+        SELECT m.id AS match_id, m.season, m.tournament, m.round,
+               2 AS side, tm.wrestler_id AS wrestler_id, w.name AS wrestler_name,
+               CASE WHEN m.winner_side = 2 THEN 1 ELSE 0 END AS won
+        FROM matches m
+        JOIN tag_team_members tm ON tm.team_id = m.comp2_id
+        JOIN wrestlers w ON w.id = tm.wrestler_id
+        WHERE m.comp2_kind = 'Team';
+        """
+    )
+    conn.commit()
+
+
+
+def _fmt_time(seconds: Optional[int]) -> Optional[str]:
+    if seconds is None:
+        return None
+    try:
+        s = int(seconds)
+    except Exception:
+        return None
+    m, sec = divmod(s, 60)
+    return f"{m}:{sec:02d}"
+
+
+@router.get("/matches", response_class=HTMLResponse)
+def matches_page(
+    request: Request,
+    season: Optional[int] = None,
+    tournament: Optional[str] = None,
+    competitor: Optional[str] = None,
+    wid: Optional[int] = None,  # wrestler ID filter for profile links
+):
+    conn = get_db()
+    try:
+        ensure_matches_schema(conn)
+
+        # Choose source table depending on wid filter
+        if wid is not None:
+            sql = (
+                "SELECT m.* FROM matches m "
+                "JOIN match_wrestlers_view mw ON mw.match_id = m.id "
+                "WHERE mw.wrestler_id = ?"
+            )
+            params: List = [wid]
+        else:
+            sql = "SELECT * FROM matches WHERE 1=1"
+            params = []
+
+        # Filters
+        if season is not None:
+            sql += " AND m.season = ?" if wid is not None else " AND season = ?"
+            params.append(season)
+        if tournament:
+            sql += (
+                " AND LOWER(m.tournament) LIKE ?" if wid is not None else " AND LOWER(tournament) LIKE ?"
+            )
+            params.append(f"%{tournament.lower()}%")
+        if competitor:
+            like = f"%{competitor.lower()}%"
+            if wid is not None:
+                sql += " AND (LOWER(m.comp1_name) LIKE ? OR LOWER(m.comp2_name) LIKE ?)"
+            else:
+                sql += " AND (LOWER(comp1_name) LIKE ? OR LOWER(comp2_name) LIKE ?)"
+            params.extend([like, like])
+
+     # In app.py, inside matches_page(), REPLACE the ORDER BY block we added earlier with this one.
+
+            order_prefix = "m." if wid is not None else ""
+            # Sort strictly by Day, then by id (no per-day order needed)
+            sql += (
+                f" ORDER BY {order_prefix}day_index IS NULL, "
+                f"{order_prefix}day_index ASC, "
+                f"{order_prefix}id ASC"
+            )
+
+
+
+        rows = conn.execute(sql, params).fetchall()
+        seasons = [r[0] for r in conn.execute(
+            "SELECT DISTINCT season FROM matches ORDER BY season DESC"
+        ).fetchall()]
+        tournaments = [r[0] for r in conn.execute(
+            "SELECT DISTINCT tournament FROM matches ORDER BY tournament ASC"
+        ).fetchall()]
+    finally:
+        conn.close()
+
+    items: List[Dict] = []
+    for r in rows:
+        d = dict(r)
+        d["match_time_display"] = _fmt_time(d.get("match_time_seconds"))
+        items.append(d)
+
+    return TEMPLATES.TemplateResponse(
+        "matches_list.html",
+        {
+            "request": request,
+            "active": "matches",
+            "matches": items,
+            "seasons": seasons,
+            "tournaments": tournaments,
+            "selected": {
+                "season": season,
+                "tournament": tournament or "",
+                "competitor": competitor or "",
+                "wid": wid,
+            },
+        },
+    )
+
+
+# Mount the router into your FastAPI app (ensure `app = FastAPI()` exists above)
+app.include_router(router)
+
+
+
+
 if __name__ == "__main__":
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
