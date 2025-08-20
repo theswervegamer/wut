@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ champ.name }}</h2>
+
+  <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:12px;">
+    {% if champ.photo %}
+      <img src="{{ champ.photo }}" alt="{{ champ.name }} photo" class="profile-photo" />
+    {% else %}
+      <div style="width:var(--photo-size); height:var(--photo-size); border:1px dashed var(--line); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted);">No photo</div>
+    {% endif %}
+  </div>
+
+  <table>
+    <tbody>
+      <tr><th style="width:140px">Gender</th><td>{{ champ.gender }}</td></tr>
+      <tr><th>Mode</th><td>{{ champ.mode }}</td></tr>
+      <tr><th>Stipulation</th><td>{{ champ.stipulation }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if champ.mode == 'Seasonal' %}
+    <h3 style="margin-top:16px">Season Champions</h3>
+    {% if not seasonal_rows %}
+      <p class="empty">No season records yet.</p>
+    {% else %}
+      <table>
+        <thead><tr><th>Season</th><th>Champion</th></tr></thead>
+        <tbody>
+          {% for r in seasonal_rows %}
+            <tr>
+              <td>S{{ r.season }}</td>
+              <td>{{ r.champion }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% else %}
+    <h3 style="margin-top:16px">Current Reign</h3>
+    {% if not current_reign %}
+      <p class="empty">No current reign.</p>
+    {% else %}
+      <p>{{ current_reign["champion"] }} — since {{ current_reign["won_on"] }} · defences: {{ current_reign["defences"] }}</p>
+    {% endif %}
+
+    <h3 style="margin-top:16px">Past Reigns</h3>
+    {% if not reign_rows %}
+      <p class="empty">No past reigns.</p>
+    {% else %}
+      <table>
+        <thead><tr><th>Champion</th><th>Won</th><th>Lost</th><th>Defences</th></tr></thead>
+        <tbody>
+          {% for r in reign_rows %}
+            <tr>
+              <td>{{ r.champion }}</td>
+              <td>{{ r.won_on }}</td>
+              <td>{{ r.lost_on }}</td>
+              <td>{{ r.defences }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+
+  <p style="margin-top:16px">
+    <a class="btn" href="/championships">Back to list</a>
+    <a class="btn" href="/championships/edit/{{ champ.id }}">Edit</a>
+  </p>
+{% endblock %}

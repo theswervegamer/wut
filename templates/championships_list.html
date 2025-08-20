@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Championships</h2>
+
+  <form method="get" class="filters" action="/championships">
+    <input type="text" name="q" placeholder="Search name" value="{{ filters.q }}">
+    <select name="gender">
+      <option value="All" {% if filters.gender == 'All' %}selected{% endif %}>All genders</option>
+      <option value="Male" {% if filters.gender == 'Male' %}selected{% endif %}>Male</option>
+      <option value="Female" {% if filters.gender == 'Female' %}selected{% endif %}>Female</option>
+    </select>
+    <select name="mode">
+      <option value="All" {% if filters.mode == 'All' %}selected{% endif %}>All modes</option>
+      <option value="Seasonal" {% if filters.mode == 'Seasonal' %}selected{% endif %}>Seasonal</option>
+      <option value="Ongoing" {% if filters.mode == 'Ongoing' %}selected{% endif %}>Ongoing</option>
+    </select>
+    <a class="btn" href="/championships">Clear</a>
+    <a class="btn" href="/championships/add">Add Championship</a>
+  </form>
+
+  {% if not items %}
+    <p class="empty">No championships.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Gender</th>
+          <th>Mode</th>
+          <th>Stipulation</th>
+          <th>Current (S{{ filters.season }})</th>
+          <th style="width:240px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in items %}
+          <tr>
+            <td><a class="plain-link" href="/championship/{{ c.id }}">{{ c.name }}</a></td>
+            <td>{{ c.gender }}</td>
+            <td>{{ c.mode }}</td>
+            <td>{{ c.stipulation }}</td>
+            <td>{{ c.current }}</td>
+            <td>
+              <a class="btn btn-small" href="/championships/edit/{{ c.id }}">Edit</a>
+              <form class="inline-form" method="post" action="/championships/delete/{{ c.id }}" style="display:inline">
+                <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete {{ c.name }}?')">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

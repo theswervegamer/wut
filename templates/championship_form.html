@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ heading }}</h2>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <!-- Basic fields -->
+  <form method="post" action="{{ action_url }}" {% if allow_photo_upload %}enctype="multipart/form-data"{% endif %}>
+    <div class="field">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}" required
+             autocomplete="off" autocapitalize="none" spellcheck="false"
+             readonly onfocus="this.removeAttribute('readonly');">
+    </div>
+
+    <div class="field">
+      <label for="gender">Gender</label>
+      <select id="gender" name="gender">
+        <option value="Male"   {% if form.gender == 'Male' %}selected{% endif %}>Male</option>
+        <option value="Female" {% if form.gender == 'Female' %}selected{% endif %}>Female</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="mode">Mode</label>
+      <select id="mode" name="mode">
+        <option value="Seasonal" {% if form.mode == 'Seasonal' %}selected{% endif %}>Seasonal</option>
+        <option value="Ongoing"  {% if form.mode == 'Ongoing'  %}selected{% endif %}>Ongoing (US Titles)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="stipulation">Stipulation</label>
+      <input type="text" id="stipulation" name="stipulation" value="{{ form.stipulation }}" placeholder="e.g., Singles, Royal Rumble" autocomplete="off">
+    </div>
+
+    {% if allow_photo_upload %}
+      <div class="field">
+        <label>Photo</label>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          {% if form.photo %}
+            <img src="{{ form.photo }}" alt="{{ form.name }} photo" class="profile-photo">
+          {% else %}
+            <div style="width:var(--photo-size); height:var(--photo-size); border:1px dashed var(--line); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted);">No photo</div>
+          {% endif %}
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <input type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp">
+            <small class="muted">JPEG/PNG/WebP, up to 8&nbsp;MB.</small>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <p>
+      <button class="btn" type="submit">Save</button>
+      <a class="btn" href="/championships">Cancel</a>
+    </p>
+  </form>
+
+  <!-- Management sections moved here -->
+  {% if champ.mode == 'Seasonal' %}
+    <h3 style="margin-top:16px">Season Champions</h3>
+    <form class="filters" method="post" action="/championship/{{ champ.id }}/season/set">
+      <input type="number" name="season" min="1" value="{{ season }}" style="width:120px">
+      <select name="champion_id">
+        {% set g = champ.gender %}
+        {% for w in request.app.state._cache_wrestlers_by_gender[g] %}
+          <option value="{{ w.id }}">{{ w.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-small" type="submit">Set Champion</button>
+    </form>
+
+    {% if not seasonal_rows %}
+      <p class="empty">No season records yet.</p>
+    {% else %}
+      <table>
+        <thead><tr><th>Season</th><th>Champion</th><th style="width:180px">Actions</th></tr></thead>
+        <tbody>
+          {% for r in seasonal_rows %}
+            <tr>
+              <td>S{{ r.season }}</td>
+              <td>{{ r.champion }}</td>
+              <td>
+                <form class="inline-form" method="post" action="/championship/{{ champ.id }}/season/delete">
+                  <input type="hidden" name="season" value="{{ r.season }}">
+                  <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete S{{ r.season }}?')">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+  {% else %}
+    <h3 style="margin-top:16px">Current Reign</h3>
+    {% if not current_reign %}
+      <form class="filters" method="post" action="/championship/{{ champ.id }}/reigns/start">
+        <input type="date" name="won_on">
+        <select name="champion_id">
+          {% set g = champ.gender %}
+          {% for w in request.app.state._cache_wrestlers_by_gender[g] %}
+            <option value="{{ w.id }}">{{ w.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-small" type="submit">Start New Reign</button>
+      </form>
+    {% else %}
+      <p>{{ current_reign["champion"] }} — since {{ current_reign["won_on"] }} · defences: {{ current_reign["defences"] }}</p>
+      <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/increment">
+        <button class="btn btn-small" type="submit">+1 Defence</button>
+      </form>
+      <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/end">
+        <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('End current reign?')">End Reign</button>
+      </form>
+    {% endif %}
+
+    <h3 style="margin-top:16px">Past Reigns</h3>
+    {% if not reign_rows %}
+      <p class="empty">No past reigns.</p>
+    {% else %}
+      <table>
+        <thead><tr><th>Champion</th><th>Won</th><th>Lost</th><th>Defences</th></tr></thead>
+        <tbody>
+          {% for r in reign_rows %}
+            <tr>
+              <td>{{ r.champion }}</td>
+              <td>{{ r.won_on }}</td>
+              <td>{{ r.lost_on }}</td>
+              <td>{{ r.defences }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+
+  <p style="margin-top:16px">
+    <a class="btn" href="/championships">Back to list</a>
+    <a class="btn" href="/championship/{{ champ.id }}">View profile</a>
+  </p>
+
+  <script>
+    // Simple today default for date input if empty
+    (function(){
+      const d = document.querySelector('input[type="date"][name="won_on"]');
+      if (d && !d.value) {
+        const t = new Date();
+        const z = n => String(n).padStart(2,'0');
+        d.value = `${t.getFullYear()}-${z(t.getMonth()+1)}-${z(t.getDate())}`;
+      }
+    })();
+    // Focus name on load
+    window.addEventListener('load', () => {
+      const el = document.getElementById('name');
+      if (el) { el.focus(); const v = el.value; el.value=''; el.value=v; }
+    });
+  </script>
+{% endblock %}

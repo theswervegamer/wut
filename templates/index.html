@@ -1,5 +1,76 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Home Page</h2>
-  <p class="muted">this is the home page</p>
+  <h2>Home</h2>
+
+  <section style="margin-top:12px">
+    <h3 style="margin:0 0 8px">Reigning Champions{% if season %} (S{{ season }}){% endif %}</h3>
+
+<style>
+  /* Tuning knobs */
+  :root {
+    --champ-cols-desktop: 6;   /* 3..5 */
+    --champ-cols-tablet: 2;    /* 1..3 */
+    --champ-gap: 16px;         /* space between cards */
+    --champ-pad: 16px;         /* card padding */
+    --champ-radius: 16px;      /* card corner radius */
+    --champ-min-h: 160;      /* card minimum height */
+    --belt-size: 130px;       /* square belt image */
+    --face-size: 130px       /* champion headshot */
+  }
+
+  .champ-grid { display:grid; gap:var(--champ-gap); }
+  @media (min-width: 1024px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-desktop), 1fr); } }
+  @media (min-width: 640px) and (max-width: 1023.98px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-tablet), 1fr); } }
+  @media (max-width: 639.98px) { .champ-grid { grid-template-columns: 1fr; } }
+
+  .champ-card {
+    border:1px solid var(--line);
+    background:#0b0b0b;
+    border-radius:var(--champ-radius);
+    padding:var(--champ-pad);
+    display:flex; gap:var(--champ-gap); align-items:center;
+    min-height:var(--champ-min-h);
+  }
+
+  .belt { width:var(--belt-size); height:var(--belt-size); object-fit:cover; border-radius:12px; border:1px solid var(--line); }
+  .belt-ph { width:var(--belt-size); height:var(--belt-size); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.8rem; }
+
+  .champ-face { width:var(--face-size); height:var(--face-size); object-fit:cover; border-radius:50%; border:1px solid var(--line); }
+  .champ-face-ph { width:var(--face-size); height:var(--face-size); border-radius:50%; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.75rem; }
+
+  .meta { color:var(--muted); font-size:.9rem; }
+  .spacer { margin-left:auto; }
+</style>
+
+
+    {% if not champs %}
+      <p class="empty">No championships yet. <a class="btn btn-small" href="/championships/add">Add one</a></p>
+    {% else %}
+      <div class="champ-grid">
+        {% for c in champs %}
+          <div class="champ-card">
+            {% if c.belt_photo %}
+              <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
+            {% else %}
+              <div class="belt-ph">No belt</div>
+            {% endif %}
+
+            <div>
+              <div style="font-weight:800; letter-spacing:.2px">{{ c.name }}</div>
+              <div class="meta">{{ c.gender }} · {{ c.mode }}{% if c.stipulation %} · {{ c.stipulation }}{% endif %}</div>
+              <div>Reigning: {{ c.champion }}</div>
+            </div>
+
+            <div class="spacer"></div>
+
+            {% if c.champ_photo %}
+              <img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/>
+            {% else %}
+              <div class="champ-face-ph">No photo</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
 {% endblock %}
