@@ -5,70 +5,135 @@
   <section style="margin-top:12px">
     <h3 style="margin:0 0 8px">Reigning Champions{% if season %} (S{{ season }}){% endif %}</h3>
 
-<style>
-  /* Tuning knobs */
-  :root {
-    --champ-cols-desktop: 6;   /* 3..5 */
-    --champ-cols-tablet: 2;    /* 1..3 */
-    --champ-gap: 16px;         /* space between cards */
-    --champ-pad: 16px;         /* card padding */
-    --champ-radius: 16px;      /* card corner radius */
-    --champ-min-h: 160;      /* card minimum height */
-    --belt-size: 130px;       /* square belt image */
-    --face-size: 130px       /* champion headshot */
-  }
+    <style>
+      :root {
+        /* Regular grid settings */
+        --champ-cols-desktop: 4;  /* regular grid cols */
+        --champ-cols-tablet: 2;
+        --champ-gap: 16px;
+        --champ-pad: 12px;
+        --champ-radius: 16px;
+        --champ-min-h: 140px;
+        --belt-w: 250px;         /* regular tile belt w/h */
+        --belt-h: 140px;
+        --face-size: 140px;      /* regular tile face size */
+        --face-zoom: 1.6;       /* 1.0–1.5; top-anchored in .champ-face */
+      }
 
-  .champ-grid { display:grid; gap:var(--champ-gap); }
-  @media (min-width: 1024px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-desktop), 1fr); } }
-  @media (min-width: 640px) and (max-width: 1023.98px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-tablet), 1fr); } }
-  @media (max-width: 639.98px) { .champ-grid { grid-template-columns: 1fr; } }
+      /* Page width & left anchor */
+      main { max-width: 1500px; margin-left: 70px; margin-right: auto; }
+      @media (min-width:1600px){ main { max-width: 1800px; } }
 
-  .champ-card {
-    border:1px solid var(--line);
-    background:#0b0b0b;
-    border-radius:var(--champ-radius);
-    padding:var(--champ-pad);
-    display:flex; gap:var(--champ-gap); align-items:center;
-    min-height:var(--champ-min-h);
-  }
+      /* --- Featured row (top 2) --- */
+      .featured {
+        /* Make each featured card bigger and with larger media */
+        --champ-min-h: 280px;   /* was 140 */
+        --champ-pad: 16px;      /* more padding */
+        --belt-w: 300px;        /* adjust to taste */
+        --belt-h: 200px;        /* keep ~1.7:1 ratio */
+        --face-size: 200px;     /* champ headshot box */
+        --face-zoom: 1.6;      /* zoom is top-anchored */
+      }
+      .featured .title { font-size: 1.06rem; }
 
-  .belt { width:var(--belt-size); height:var(--belt-size); object-fit:cover; border-radius:12px; border:1px solid var(--line); }
-  .belt-ph { width:var(--belt-size); height:var(--belt-size); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.8rem; }
+      /* Fixed-width featured cards centered (so they don't span entire row) */
+      .featured-grid {
+        display:grid; gap:var(--champ-gap);
+        grid-template-columns: repeat(2, minmax(360px, 560px));
+        justify-content:center;
+        margin-bottom: 12px;
+      }
+      @media (max-width: 1200px) {
+        .featured-grid { grid-template-columns: minmax(320px, 560px); }
+      }
 
-  .champ-face { width:var(--face-size); height:var(--face-size); object-fit:cover; border-radius:50%; border:1px solid var(--line); }
-  .champ-face-ph { width:var(--face-size); height:var(--face-size); border-radius:50%; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.75rem; }
+      /* --- Regular grid --- */
+      .champ-grid { display:grid; gap:var(--champ-gap); }
+      @media (min-width: 1024px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-desktop), 1fr); } }
+      @media (min-width: 640px) and (max-width: 1023.98px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-tablet), 1fr); } }
+      @media (max-width: 639.98px) { .champ-grid { grid-template-columns: 1fr; } }
 
-  .meta { color:var(--muted); font-size:.9rem; }
-  .spacer { margin-left:auto; }
-</style>
+      /* --- Card + media styles (shared) --- */
+      .champ-card {
+        border:1px solid var(--line); background:#0b0b0b; border-radius:var(--champ-radius);
+        padding:var(--champ-pad); display:flex; flex-direction:column; gap:12px; min-height:var(--champ-min-h);
+      }
+      .link-card { text-decoration:none; color:inherit; display:block; cursor:pointer; }
+      .link-card:hover { background: var(--tab-hover); }
+      .link-card:focus-visible { outline:2px solid #3a3a3a; outline-offset:2px; }
 
+      .title { font-weight:800; letter-spacing:.2px; }
 
-    {% if not champs %}
-      <p class="empty">No championships yet. <a class="btn btn-small" href="/championships/add">Add one</a></p>
-    {% else %}
+      .img-row { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+      .left, .right { display:flex; align-items:center; justify-content:center; }
+
+      /* Belt: rectangular, show full belt incl. sideplates */
+      .belt { width:var(--belt-w); height:var(--belt-h); object-fit:contain; background:#111; border-radius:12px; border:1px solid var(--line); }
+      .belt-ph { width:var(--belt-w); height:var(--belt-h); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.8rem; }
+
+      /* Champ: clip box + zoom, anchored to top so heads don’t crop */
+      .face-clip { width:var(--face-size); height:var(--face-size); border-radius:12px; border:1px solid var(--line); overflow:hidden; background:#111; }
+      .champ-face { width:100%; height:100%; object-fit:cover; object-position:50% 0%; transform:scale(var(--face-zoom)); transform-origin:50% 0%; display:block; }
+      .champ-face-ph { width:var(--face-size); height:var(--face-size); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.75rem; }
+
+      /* Small screens: stack */
+      @media (max-width: 420px) { .img-row { flex-wrap:wrap; justify-content:center; gap:10px; } }
+    </style>
+
+    {% if featured and featured|length > 0 %}
+      <div class="featured-grid">
+        {% for c in featured %}
+          <a href="/championship/{{ c.id }}" class="champ-card link-card featured">
+            <div>
+              <div class="title">{{ c.name }}</div>
+              <div>Champion: {{ c.champion }}</div>
+            </div>
+            <div class="img-row">
+              <div class="left">
+                {% if c.champ_photo %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/></div>
+                {% else %}
+                  <div class="champ-face-ph">No photo</div>
+                {% endif %}
+              </div>
+              <div class="right">
+                {% if c.belt_photo %}
+                  <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
+                {% else %}
+                  <div class="belt-ph">No belt</div>
+                {% endif %}
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if champs %}
       <div class="champ-grid">
         {% for c in champs %}
-          <div class="champ-card">
-            {% if c.belt_photo %}
-              <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
-            {% else %}
-              <div class="belt-ph">No belt</div>
-            {% endif %}
-
+          <a href="/championship/{{ c.id }}" class="champ-card link-card">
             <div>
-              <div style="font-weight:800; letter-spacing:.2px">{{ c.name }}</div>
-              <div class="meta">{{ c.gender }} · {{ c.mode }}{% if c.stipulation %} · {{ c.stipulation }}{% endif %}</div>
-              <div>Reigning: {{ c.champion }}</div>
+              <div class="title">{{ c.name }}</div>
+              <div>Champion: {{ c.champion }}</div>
             </div>
-
-            <div class="spacer"></div>
-
-            {% if c.champ_photo %}
-              <img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/>
-            {% else %}
-              <div class="champ-face-ph">No photo</div>
-            {% endif %}
-          </div>
+            <div class="img-row">
+              <div class="left">
+                {% if c.champ_photo %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/></div>
+                {% else %}
+                  <div class="champ-face-ph">No photo</div>
+                {% endif %}
+              </div>
+              <div class="right">
+                {% if c.belt_photo %}
+                  <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
+                {% else %}
+                  <div class="belt-ph">No belt</div>
+                {% endif %}
+              </div>
+            </div>
+          </a>
         {% endfor %}
       </div>
     {% endif %}

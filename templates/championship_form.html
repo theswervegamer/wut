@@ -1,159 +1,180 @@
 {% extends "base.html" %}
 {% block content %}
   <h2>{{ heading }}</h2>
+
+  <style>
+    .grid { display:grid; gap:12px; grid-template-columns: 1fr; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .card { border:1px solid var(--line); background:#0b0b0b; border-radius:16px; padding:12px; }
+    .label { display:block; font-weight:600; margin:6px 0 4px; }
+    input[type=text], select, input[type=number] { width:100%; max-width: 380px; padding:10px 12px; background:#0b0b0b; color:var(--fg); border:1px solid var(--line); border-radius:8px; }
+    .two { display:grid; gap:12px; grid-template-columns: repeat(2, minmax(220px, 380px)); }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .muted { color:var(--muted); }
+    .photo { width:260px; height:160px; object-fit:contain; border:1px solid var(--line); border-radius:12px; background:#111; }
+    .photo-ph { width:260px; height:160px; display:flex; align-items:center; justify-content:center; border:1px dashed var(--line); border-radius:12px; color:var(--muted); }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  </style>
+
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
-  <!-- Basic fields -->
-  <form method="post" action="{{ action_url }}" {% if allow_photo_upload %}enctype="multipart/form-data"{% endif %}>
-    <div class="field">
-      <label for="name">Name</label>
-      <input type="text" id="name" name="name" value="{{ form.name }}" required
-             autocomplete="off" autocapitalize="none" spellcheck="false"
-             readonly onfocus="this.removeAttribute('readonly');">
-    </div>
-
-    <div class="field">
-      <label for="gender">Gender</label>
-      <select id="gender" name="gender">
-        <option value="Male"   {% if form.gender == 'Male' %}selected{% endif %}>Male</option>
-        <option value="Female" {% if form.gender == 'Female' %}selected{% endif %}>Female</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="mode">Mode</label>
-      <select id="mode" name="mode">
-        <option value="Seasonal" {% if form.mode == 'Seasonal' %}selected{% endif %}>Seasonal</option>
-        <option value="Ongoing"  {% if form.mode == 'Ongoing'  %}selected{% endif %}>Ongoing (US Titles)</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="stipulation">Stipulation</label>
-      <input type="text" id="stipulation" name="stipulation" value="{{ form.stipulation }}" placeholder="e.g., Singles, Royal Rumble" autocomplete="off">
-    </div>
-
-    {% if allow_photo_upload %}
-      <div class="field">
-        <label>Photo</label>
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          {% if form.photo %}
-            <img src="{{ form.photo }}" alt="{{ form.name }} photo" class="profile-photo">
-          {% else %}
-            <div style="width:var(--photo-size); height:var(--photo-size); border:1px dashed var(--line); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted);">No photo</div>
-          {% endif %}
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <input type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/webp">
-            <small class="muted">JPEG/PNG/WebP, up to 8&nbsp;MB.</small>
-          </div>
+  <div class="grid">
+    <form class="card" method="post" action="{{ action_url }}" enctype="multipart/form-data">
+      <div class="two">
+        <div>
+          <label class="label">Name</label>
+          <input type="text" name="name" value="{{ form.name }}" required>
+        </div>
+        <div>
+          <label class="label">Gender</label>
+          <select name="gender">
+            <option value="Male"   {% if form.gender=='Male' %}selected{% endif %}>Male</option>
+            <option value="Female" {% if form.gender=='Female' %}selected{% endif %}>Female</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Stipulation</label>
+          <input type="text" name="stipulation" value="{{ form.stipulation }}" placeholder="e.g., Singles, Royal Rumble, ...">
+        </div>
+        <div>
+          <label class="label">Mode</label>
+          <select name="mode">
+            <option value="Seasonal" {% if form.mode=='Seasonal' %}selected{% endif %}>Seasonal</option>
+            <option value="Ongoing"  {% if form.mode=='Ongoing'  %}selected{% endif %}>Ongoing</option>
+          </select>
         </div>
       </div>
-    {% endif %}
 
-    <p>
-      <button class="btn" type="submit">Save</button>
-      <a class="btn" href="/championships">Cancel</a>
-    </p>
-  </form>
+      <div class="row" style="margin-top:8px">
+        {% if allow_photo_upload %}
+          <label class="label" style="width:100%">Belt Photo</label>
+          <input type="file" name="photo" accept="image/*">
+          {% if form.photo %}
+            <img class="photo" src="{{ form.photo }}" alt="Belt photo">
+          {% else %}
+            <div class="photo-ph">No photo</div>
+          {% endif %}
+        {% endif %}
+      </div>
 
-  <!-- Management sections moved here -->
-  {% if champ.mode == 'Seasonal' %}
-    <h3 style="margin-top:16px">Season Champions</h3>
-    <form class="filters" method="post" action="/championship/{{ champ.id }}/season/set">
-      <input type="number" name="season" min="1" value="{{ season }}" style="width:120px">
-      <select name="champion_id">
-        {% set g = champ.gender %}
-        {% for w in request.app.state._cache_wrestlers_by_gender[g] %}
-          <option value="{{ w.id }}">{{ w.name }}</option>
-        {% endfor %}
-      </select>
-      <button class="btn btn-small" type="submit">Set Champion</button>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn" type="submit">Save</button>
+        <a class="btn" href="/championships">Back</a>
+      </div>
     </form>
 
-    {% if not seasonal_rows %}
-      <p class="empty">No season records yet.</p>
+    {% if champ.mode == 'Seasonal' %}
+      {% set st = (champ.stipulation or '')|lower %}
+      {% set allow_runnerup = st not in ['royal rumble','elimination chamber','rumble','elimination'] %}
+
+      <div class="card">
+        <h3 style="margin:0 0 8px">Seasonal Champions</h3>
+        <form class="row" method="post" action="/championship/{{ champ.id }}/season/set">
+          <label class="label">Season</label>
+          <input type="number" name="season" min="1" value="{{ season }}" required>
+          <label class="label">Champion</label>
+          <select name="champion_id">
+            {% for w in request.app.state._cache_wrestlers_by_gender[champ.gender] %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+
+          {% if allow_runnerup %}
+            <label class="label">Runner-up (optional)</label>
+            <select name="runner_up_id">
+              <option value="">— None —</option>
+              {% for w in request.app.state._cache_wrestlers_by_gender[champ.gender] %}
+                <option value="{{ w.id }}">{{ w.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <!-- Hidden empty field to always submit something harmless -->
+            <input type="hidden" name="runner_up_id" value="">
+          {% endif %}
+
+          <button class="btn" type="submit">Set</button>
+        </form>
+
+        {% if seasonal_rows %}
+          <table>
+            <thead><tr><th>Season</th><th>Champion</th><th>Runner-up</th><th></th></tr></thead>
+            <tbody>
+              {% for r in seasonal_rows %}
+                <tr>
+                  <td>S{{ r.season }}</td>
+                  <td>{{ r.champion }}</td>
+                  <td>{{ r.runner_up or '—' }}</td>
+                <td>
+<form class="inline-form" method="post" action="/championship/{{ champ.id }}/season/delete">
+<input type="hidden" name="season" value="{{ r.season }}" />
+<button class="btn btn-small btn-danger" type="submit">Delete</button>
+</form>
+</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">No seasons recorded yet.</p>
+        {% endif %}
+      </div>
     {% else %}
-      <table>
-        <thead><tr><th>Season</th><th>Champion</th><th style="width:180px">Actions</th></tr></thead>
-        <tbody>
-          {% for r in seasonal_rows %}
-            <tr>
-              <td>S{{ r.season }}</td>
-              <td>{{ r.champion }}</td>
-              <td>
-                <form class="inline-form" method="post" action="/championship/{{ champ.id }}/season/delete">
-                  <input type="hidden" name="season" value="{{ r.season }}">
-                  <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('Delete S{{ r.season }}?')">Delete</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Ongoing Title – Reigns</h3>
+        <form class="row" method="post" action="/championship/{{ champ.id }}/reigns/start">
+          <label class="label">Champion</label>
+          <select name="champion_id" required>
+            {% for w in eligible %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+          <label class="label">Season Won</label>
+          <input type="number" name="season_won" min="1" value="{{ season }}" required>
+          <label class="label">Champion #</label>
+          <input type="number" name="champ_number" min="1" value="{{ next_champ_no }}" placeholder="auto" />
+          <button class="btn" type="submit">Start Reign</button>
+        </form>
+
+        {% if current_reign %}
+          <div class="row" style="margin-top:10px">
+            <div><strong>Current:</strong></div>
+            <div>{{ current_reign["champion"] }}</div>
+            <div class="muted">(Champ #{{ current_reign["champ_number"] }}; S{{ current_reign["season_won"] }})</div>
+            <div class="muted">Defences: {{ current_reign["defences"] }}</div>
+          </div>
+          <div class="actions" style="margin-top:8px">
+            <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/increment">
+              <button class="btn btn-small" type="submit">+1 Defence</button>
+            </form>
+            <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/end">
+              <label class="label" style="margin:0 6px 0 0">Season Lost</label>
+              <input type="number" name="lost_season" min="1" value="{{ season }}" style="width:100px">
+              <button class="btn btn-small btn-danger" type="submit">End Reign</button>
+            </form>
+          </div>
+        {% else %}
+          <p class="muted" style="margin-top:8px">No active reign.</p>
+        {% endif %}
+
+        {% if reign_rows %}
+          <table>
+            <thead><tr><th>#</th><th>Champion</th><th>Season Won</th><th>Defences</th></tr></thead>
+            <tbody>
+              {% for r in reign_rows %}
+                <tr>
+                  <td>{{ r.champ_number or '-' }}</td>
+                  <td>{{ r.champion }}</td>
+                  <td>S{{ r.season_won or '-' }}</td>
+                  <td>{{ r.defences }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">No past reigns yet.</p>
+        {% endif %}
+      </div>
     {% endif %}
-
-  {% else %}
-    <h3 style="margin-top:16px">Current Reign</h3>
-    {% if not current_reign %}
-      <form class="filters" method="post" action="/championship/{{ champ.id }}/reigns/start">
-        <input type="date" name="won_on">
-        <select name="champion_id">
-          {% set g = champ.gender %}
-          {% for w in request.app.state._cache_wrestlers_by_gender[g] %}
-            <option value="{{ w.id }}">{{ w.name }}</option>
-          {% endfor %}
-        </select>
-        <button class="btn btn-small" type="submit">Start New Reign</button>
-      </form>
-    {% else %}
-      <p>{{ current_reign["champion"] }} — since {{ current_reign["won_on"] }} · defences: {{ current_reign["defences"] }}</p>
-      <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/increment">
-        <button class="btn btn-small" type="submit">+1 Defence</button>
-      </form>
-      <form class="inline-form" method="post" action="/championship/{{ champ.id }}/reigns/end">
-        <button class="btn btn-small btn-danger" type="submit" onclick="return confirm('End current reign?')">End Reign</button>
-      </form>
-    {% endif %}
-
-    <h3 style="margin-top:16px">Past Reigns</h3>
-    {% if not reign_rows %}
-      <p class="empty">No past reigns.</p>
-    {% else %}
-      <table>
-        <thead><tr><th>Champion</th><th>Won</th><th>Lost</th><th>Defences</th></tr></thead>
-        <tbody>
-          {% for r in reign_rows %}
-            <tr>
-              <td>{{ r.champion }}</td>
-              <td>{{ r.won_on }}</td>
-              <td>{{ r.lost_on }}</td>
-              <td>{{ r.defences }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
-  {% endif %}
-
-  <p style="margin-top:16px">
-    <a class="btn" href="/championships">Back to list</a>
-    <a class="btn" href="/championship/{{ champ.id }}">View profile</a>
-  </p>
-
-  <script>
-    // Simple today default for date input if empty
-    (function(){
-      const d = document.querySelector('input[type="date"][name="won_on"]');
-      if (d && !d.value) {
-        const t = new Date();
-        const z = n => String(n).padStart(2,'0');
-        d.value = `${t.getFullYear()}-${z(t.getMonth()+1)}-${z(t.getDate())}`;
-      }
-    })();
-    // Focus name on load
-    window.addEventListener('load', () => {
-      const el = document.getElementById('name');
-      if (el) { el.focus(); const v = el.value; el.value=''; el.value=v; }
-    });
-  </script>
+  </div>
 {% endblock %}

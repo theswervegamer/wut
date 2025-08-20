@@ -2,69 +2,81 @@
 {% block content %}
   <h2>{{ champ.name }}</h2>
 
-  <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:12px;">
-    {% if champ.photo %}
-      <img src="{{ champ.photo }}" alt="{{ champ.name }} photo" class="profile-photo" />
-    {% else %}
-      <div style="width:var(--photo-size); height:var(--photo-size); border:1px dashed var(--line); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted);">No photo</div>
-    {% endif %}
-  </div>
+  <style>
+    .meta { color: var(--muted); }
+    .belt { width: 320px; height: 180px; object-fit: contain; border:1px solid var(--line); border-radius:12px; background:#111; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  </style>
 
-  <table>
-    <tbody>
-      <tr><th style="width:140px">Gender</th><td>{{ champ.gender }}</td></tr>
-      <tr><th>Mode</th><td>{{ champ.mode }}</td></tr>
-      <tr><th>Stipulation</th><td>{{ champ.stipulation }}</td></tr>
-    </tbody>
-  </table>
+  <p class="meta">Gender: {{ champ.gender }} | Stipulation: {{ champ.stipulation }} | Mode: {{ champ.mode }}</p>
+
+  {% if champ.photo %}
+    <img class="belt" src="{{ champ.photo }}" alt="{{ champ.name }} belt">
+  {% endif %}
 
   {% if champ.mode == 'Seasonal' %}
-    <h3 style="margin-top:16px">Season Champions</h3>
-    {% if not seasonal_rows %}
-      <p class="empty">No season records yet.</p>
-    {% else %}
+    {% set st = (champ.stipulation or '')|lower %}
+    {% set show_ru = st not in ['royal rumble','elimination chamber','rumble','elimination'] %}
+
+    <h3>Champions by Season</h3>
+    {% if seasonal_rows %}
       <table>
-        <thead><tr><th>Season</th><th>Champion</th></tr></thead>
-        <tbody>
-          {% for r in seasonal_rows %}
-            <tr>
-              <td>S{{ r.season }}</td>
-              <td>{{ r.champion }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
+        {% if show_ru %}
+          <thead><tr><th>Season</th><th>Champion</th><th>Runner-up</th></tr></thead>
+          <tbody>
+            {% for r in seasonal_rows %}
+              <tr>
+                <td>S{{ r.season }}</td>
+                <td>{{ r.champion }}</td>
+                <td>{{ r.runner_up or '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% else %}
+          <thead><tr><th>Season</th><th>Champion</th></tr></thead>
+          <tbody>
+            {% for r in seasonal_rows %}
+              <tr>
+                <td>S{{ r.season }}</td>
+                <td>{{ r.champion }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        {% endif %}
       </table>
+    {% else %}
+      <p class="meta">No seasons recorded yet.</p>
     {% endif %}
   {% else %}
-    <h3 style="margin-top:16px">Current Reign</h3>
-    {% if not current_reign %}
-      <p class="empty">No current reign.</p>
+    <h3>Current Reign</h3>
+    {% if current_reign %}
+      <p>
+        <strong>{{ current_reign["champion"] }}</strong>
+        <span class="meta">(Champ #{{ current_reign["champ_number"] }}; S{{ current_reign["season_won"] }})</span><br>
+        <span class="meta">Successful Defences: {{ current_reign["defences"] }}</span>
+      </p>
     {% else %}
-      <p>{{ current_reign["champion"] }} — since {{ current_reign["won_on"] }} · defences: {{ current_reign["defences"] }}</p>
+      <p class="meta">No active reign.</p>
     {% endif %}
 
-    <h3 style="margin-top:16px">Past Reigns</h3>
-    {% if not reign_rows %}
-      <p class="empty">No past reigns.</p>
-    {% else %}
+    <h3>Past Reigns</h3>
+    {% if reign_rows %}
       <table>
-        <thead><tr><th>Champion</th><th>Won</th><th>Lost</th><th>Defences</th></tr></thead>
+        <thead><tr><th>#</th><th>Champion</th><th>Season Won</th><th>Defences</th></tr></thead>
         <tbody>
           {% for r in reign_rows %}
             <tr>
+              <td>{{ r.champ_number or '-' }}</td>
               <td>{{ r.champion }}</td>
-              <td>{{ r.won_on }}</td>
-              <td>{{ r.lost_on }}</td>
+              <td>S{{ r.season_won or '-' }}</td>
               <td>{{ r.defences }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    {% else %}
+      <p class="meta">No past reigns yet.</p>
     {% endif %}
   {% endif %}
-
-  <p style="margin-top:16px">
-    <a class="btn" href="/championships">Back to list</a>
-    <a class="btn" href="/championships/edit/{{ champ.id }}">Edit</a>
-  </p>
 {% endblock %}

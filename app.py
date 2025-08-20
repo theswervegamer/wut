@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
+import json
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = APP_DIR / "data"
@@ -31,6 +32,36 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # ---------------- DB helpers ----------------
+
+
+
+def load_champ_order() -> None:
+    """Load optional config/championship_order.json and build lookup sets.
+    Stores on app.state.champ_order = {featured, order, index, featured_set}
+    """
+    cfg_path = APP_DIR / "config" / "championship_order.json"
+    featured: list[str] = []
+    order: list[str] = []
+    try:
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        featured = [str(x).strip() for x in data.get("featured", []) if str(x).strip()]
+        order = [str(x).strip() for x in data.get("order", []) if str(x).strip()]
+    except FileNotFoundError:
+        # optional file; skip if missing
+        cfg_path.parent.mkdir(exist_ok=True)
+    except Exception as e:
+        print(f"[warning] Failed to read {cfg_path}: {e}")
+
+    index = {name.lower(): i for i, name in enumerate(order)}
+    featured_set = {name.lower() for name in featured}
+    app.state.champ_order = {
+        "featured": featured,
+        "order": order,
+        "index": index,
+        "featured_set": featured_set,
+    }
+
+
 
 def get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -159,6 +190,17 @@ def init_db() -> None:
             """
         )
 
+        # In app.py, inside init_db(), paste this RIGHT AFTER the CREATE TABLE for championship_seasons
+# and BEFORE the block of CREATE INDEX statements.
+
+        # --- Seasonal extras: optional runner-up per season ---
+        if not _column_exists(conn, "championship_seasons", "runner_up_id"):
+            conn.execute("ALTER TABLE championship_seasons ADD COLUMN runner_up_id INTEGER")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_champ_seasons_ru ON championship_seasons(runner_up_id)"
+            )
+
+
         # Ongoing title reigns (open-ended intervals)
         conn.execute(
             """
@@ -174,6 +216,16 @@ def init_db() -> None:
             );
             """
         )
+
+
+        # --- Ongoing extras: season + champion number (no real dates required) ---
+        if not _column_exists(conn, "championship_reigns", "season_won"):
+            conn.execute("ALTER TABLE championship_reigns ADD COLUMN season_won INTEGER")
+        if not _column_exists(conn, "championship_reigns", "champ_number"):
+            conn.execute("ALTER TABLE championship_reigns ADD COLUMN champ_number INTEGER")
+        # (We keep won_on/lost_on TEXT columns for open/closed state; you won't need real dates.)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reigns_champnum ON championship_reigns(championship_id, champ_number)")
+
 
         # Indexes
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wrestlers_name          ON wrestlers(name)")
@@ -198,10 +250,13 @@ def init_db() -> None:
 
 
 
+# REPLACE your current startup with this one so we also load the order config
 @app.on_event("startup")
 def on_startup() -> None:
-    init_db()                 # make sure tables exist
-    _refresh_wrestler_cache() # build cache for templates
+    init_db()
+    _refresh_wrestler_cache()
+    load_champ_order()
+
 
 
 # ---------------- Utilities ----------------
@@ -218,22 +273,31 @@ def norm_active(val: str) -> int:
     return 1 if v in {"yes", "y", "1", "true", "on"} else 0
 
 
+def _next_champ_number(conn: sqlite3.Connection, cid: int) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(MAX(champ_number), 0) + 1 AS nxt FROM championship_reigns WHERE championship_id = ?",
+        (cid,),
+    ).fetchone()
+    return int(row[0] or 1)
+
+
+
 # ---------------- Common Routes ----------------
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon_redirect():
     return RedirectResponse(url="/static/favicon.svg", status_code=307)
 
-# REPLACE your existing home() route with this version (adds separate champ_photo and larger tile intent)
+# REPLACE your existing home() with this version
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def home(request: Request):
     conn = get_conn()
     try:
-        champs = conn.execute(
+        rows = conn.execute(
             "SELECT id, name, gender, stipulation, mode, photo FROM championships ORDER BY name"
         ).fetchall()
         items: list[dict] = []
-        for c in champs:
+        for c in rows:
             champ_name = None
             champ_photo = None
             if c["mode"] == "Seasonal":
@@ -286,9 +350,31 @@ async def home(request: Request):
     finally:
         conn.close()
 
+    # Apply ordering per config
+    order_cfg = getattr(app.state, "champ_order", {"index": {}, "featured_set": set(), "featured": []})
+    index = order_cfg.get("index", {})
+    featured_set = order_cfg.get("featured_set", set())
+    featured_order = {name.lower(): i for i, name in enumerate(order_cfg.get("featured", []))}
+
+    for it in items:
+        it["_key"] = it["name"].lower()
+        it["is_featured"] = it["_key"] in featured_set
+
+    featured_items = [it for it in items if it["is_featured"]]
+    featured_items.sort(key=lambda d: featured_order.get(d["_key"], 1_000_000))
+
+    regular_items = [it for it in items if not it["is_featured"]]
+    regular_items.sort(key=lambda d: (index.get(d["_key"], 1_000_000), d["name"]))
+
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "active": "home", "champs": items, "season": CURRENT_SEASON},
+        {
+            "request": request,
+            "active": "home",
+            "featured": featured_items,
+            "champs": regular_items,
+            "season": CURRENT_SEASON,
+        },
     )
 
 
@@ -1186,8 +1272,10 @@ async def championships_list(request: Request):
     )
 
 
-# REPLACE your existing championship_detail() route with this version
-# REPLACE your existing championship_detail() with this version (adds photo)
+# REPLACE **all** existing functions that start with
+# @app.get("/championship/{cid}", response_class=HTMLResponse, include_in_schema=False)
+# with THIS SINGLE VERSION below. Keep only one copy in the file.
+
 @app.get("/championship/{cid}", response_class=HTMLResponse, include_in_schema=False)
 async def championship_detail(request: Request, cid: int):
     conn = get_conn()
@@ -1204,20 +1292,25 @@ async def championship_detail(request: Request, cid: int):
         current_reign = None
 
         if c["mode"] == "Seasonal":
+            # ASC so S1 is at the top
             seasonal_rows = conn.execute(
                 """
-                SELECT s.season, w.name as champion
+                SELECT s.season,
+                       w.name  AS champion,
+                       ru.name AS runner_up
                 FROM championship_seasons s
-                JOIN wrestlers w ON w.id = s.champion_id
+                JOIN wrestlers w       ON w.id  = s.champion_id
+                LEFT JOIN wrestlers ru ON ru.id = s.runner_up_id
                 WHERE s.championship_id = ?
                 ORDER BY s.season ASC
                 """,
                 (cid,),
             ).fetchall()
         else:
+            # Current open reign (if any)
             current_reign = conn.execute(
                 """
-                SELECT r.id, w.name as champion, r.won_on, r.defences
+                SELECT r.id, w.name AS champion, r.season_won, r.champ_number, r.defences
                 FROM championship_reigns r
                 JOIN wrestlers w ON w.id = r.champion_id
                 WHERE r.championship_id = ? AND r.lost_on IS NULL
@@ -1225,13 +1318,14 @@ async def championship_detail(request: Request, cid: int):
                 """,
                 (cid,),
             ).fetchone()
+            # Closed reigns (newest first)
             reign_rows = conn.execute(
                 """
-                SELECT w.name as champion, r.won_on, r.lost_on, r.defences
+                SELECT w.name AS champion, r.season_won, r.champ_number, r.defences
                 FROM championship_reigns r
                 JOIN wrestlers w ON w.id = r.champion_id
                 WHERE r.championship_id = ? AND r.lost_on IS NOT NULL
-                ORDER BY r.id DESC
+                ORDER BY r.champ_number DESC, r.id DESC
                 """,
                 (cid,),
             ).fetchall()
@@ -1258,6 +1352,28 @@ async def championship_detail(request: Request, cid: int):
         },
     )
 
+
+# Add or replace this handler
+@app.get("/championships/add", response_class=HTMLResponse, include_in_schema=False)
+async def championships_add_form(request: Request):
+    return templates.TemplateResponse(
+        "championship_form.html",
+        {
+            "request": request,
+            "active": "champs",
+            "heading": "Add Championship",
+            "action_url": "/championships/add",
+            "form": {"name": "", "gender": "Male", "stipulation": "", "mode": "Seasonal", "photo": None},
+            "allow_photo_upload": False,   # upload on Edit page for now
+            # below are used by the template's management sections; keep empty on Add
+            "champ": {"id": 0, "gender": "Male", "mode": "Seasonal"},
+            "season": CURRENT_SEASON,
+            "seasonal_rows": [],
+            "current_reign": None,
+            "reign_rows": [],
+            "error": "",
+        },
+    )
 
 
 @app.post("/championships/add", response_class=HTMLResponse, include_in_schema=False)
@@ -1319,7 +1435,7 @@ async def championships_add_submit(
     return RedirectResponse(url="/championships", status_code=303)
 
 
-# REPLACE your existing championships_edit_form with this version
+# REPLACE your entire championships_edit_form() with this version
 @app.get("/championships/edit/{cid}", response_class=HTMLResponse, include_in_schema=False)
 async def championships_edit_form(request: Request, cid: int):
     conn = get_conn()
@@ -1334,12 +1450,17 @@ async def championships_edit_form(request: Request, cid: int):
         seasonal_rows = []
         current_reign = None
         reign_rows = []
+        next_champ_no = None
+
         if c["mode"] == "Seasonal":
             seasonal_rows = conn.execute(
                 """
-                SELECT s.season, w.name as champion
+                SELECT s.season,
+                       w.name  AS champion,
+                       ru.name AS runner_up
                 FROM championship_seasons s
-                JOIN wrestlers w ON w.id = s.champion_id
+                JOIN wrestlers w  ON w.id  = s.champion_id
+                LEFT JOIN wrestlers ru ON ru.id = s.runner_up_id
                 WHERE s.championship_id = ?
                 ORDER BY s.season DESC
                 """,
@@ -1348,7 +1469,7 @@ async def championships_edit_form(request: Request, cid: int):
         else:
             current_reign = conn.execute(
                 """
-                SELECT r.id, w.name as champion, r.won_on, r.defences
+                SELECT r.id, w.name as champion, r.defences, r.season_won, r.champ_number
                 FROM championship_reigns r
                 JOIN wrestlers w ON w.id = r.champion_id
                 WHERE r.championship_id = ? AND r.lost_on IS NULL
@@ -1358,14 +1479,18 @@ async def championships_edit_form(request: Request, cid: int):
             ).fetchone()
             reign_rows = conn.execute(
                 """
-                SELECT w.name as champion, r.won_on, r.lost_on, r.defences
+                SELECT w.name as champion, r.season_won, r.champ_number, r.defences
                 FROM championship_reigns r
                 JOIN wrestlers w ON w.id = r.champion_id
                 WHERE r.championship_id = ? AND r.lost_on IS NOT NULL
-                ORDER BY r.id DESC
+                ORDER BY r.champ_number DESC NULLS LAST, r.id DESC
                 """,
                 (cid,),
             ).fetchall()
+            next_champ_no = _next_champ_number(conn, cid)
+
+        cache = getattr(app.state, "_cache_wrestlers_by_gender", {})
+        eligible = cache.get(c["gender"], [])
     finally:
         conn.close()
 
@@ -1389,10 +1514,11 @@ async def championships_edit_form(request: Request, cid: int):
             "seasonal_rows": seasonal_rows,
             "current_reign": current_reign,
             "reign_rows": reign_rows,
+            "eligible": eligible,
+            "next_champ_no": next_champ_no,
             "error": "",
         },
     )
-
 
 
 # REPLACE your existing championships_edit_submit with this version
@@ -1511,91 +1637,62 @@ async def championships_delete(cid: int):
         conn.close()
     return RedirectResponse(url="/championships", status_code=303)
 
-# Championship detail + actions
 
-@app.get("/championship/{cid}", response_class=HTMLResponse, include_in_schema=False)
-async def championship_detail(request: Request, cid: int):
+
+
+# 1) REPLACE this whole function in app.py
+# Find the line:
+# @app.post("/championship/{cid}/season/set", include_in_schema=False)
+# and replace that ENTIRE function with the code below.
+
+@app.post("/championship/{cid}/season/set", include_in_schema=False)
+async def championship_set_season(
+    cid: int,
+    champion_id: int = Form(...),
+    season: int = Form(...),
+    runner_up_id: str = Form("")  # IMPORTANT: name matches <select name="runner_up_id">
+):
     conn = get_conn()
     try:
         c = conn.execute(
-            "SELECT id, name, gender, stipulation, mode FROM championships WHERE id = ?",
+            "SELECT gender, mode, COALESCE(stipulation, '') AS stipulation FROM championships WHERE id = ?",
             (cid,),
         ).fetchone()
         if not c:
             raise HTTPException(status_code=404, detail="Championship not found")
-
-        seasonal_rows = []
-        reign_rows = []
-        current_reign: Optional[sqlite3.Row] = None
-
-        if c["mode"] == "Seasonal":
-            seasonal_rows = conn.execute(
-                """
-                SELECT s.season, w.name as champion
-                FROM championship_seasons s
-                JOIN wrestlers w ON w.id = s.champion_id
-                WHERE s.championship_id = ?
-                ORDER BY s.season DESC
-                """,
-                (cid,),
-            ).fetchall()
-        else:
-            # current reign
-            current_reign = conn.execute(
-                """
-                SELECT r.id, w.name as champion, r.won_on, r.defences
-                FROM championship_reigns r
-                JOIN wrestlers w ON w.id = r.champion_id
-                WHERE r.championship_id = ? AND r.lost_on IS NULL
-                ORDER BY r.id DESC LIMIT 1
-                """,
-                (cid,),
-            ).fetchone()
-            # past reigns
-            reign_rows = conn.execute(
-                """
-                SELECT w.name as champion, r.won_on, r.lost_on, r.defences
-                FROM championship_reigns r
-                JOIN wrestlers w ON w.id = r.champion_id
-                WHERE r.championship_id = ? AND r.lost_on IS NOT NULL
-                ORDER BY r.id DESC
-                """,
-                (cid,),
-            ).fetchall()
-    finally:
-        conn.close()
-
-    return templates.TemplateResponse(
-        "championship_detail.html",
-        {
-            "request": request,
-            "active": "champs",
-            "champ": {"id": c["id"], "name": c["name"], "gender": c["gender"], "stipulation": c["stipulation"] or "", "mode": c["mode"]},
-            "season": CURRENT_SEASON,
-            "seasonal_rows": seasonal_rows,
-            "current_reign": current_reign,
-            "reign_rows": reign_rows,
-        },
-    )
-
-
-@app.post("/championship/{cid}/season/set", include_in_schema=False)
-async def championship_set_season(cid: int, champion_id: int = Form(...), season: int = Form(...)):
-    conn = get_conn()
-    try:
-        # Validate
-        c = conn.execute("SELECT gender, mode FROM championships WHERE id = ?", (cid,)).fetchone()
-        if not c:
-            raise HTTPException(status_code=404, detail="Championship not found")
         if c["mode"] != "Seasonal":
             raise HTTPException(status_code=400, detail="Not a Seasonal championship")
+
+        # Validate champion
         w = conn.execute("SELECT id FROM wrestlers WHERE id = ? AND gender = ?", (champion_id, c["gender"]))
         if not w.fetchone():
             raise HTTPException(status_code=400, detail="Champion must be a wrestler of the correct gender")
 
+        # Decide if runner-up is applicable
+        st = (c["stipulation"] or "").strip().lower()
+        allow_runner_up = st not in {"royal rumble", "elimination chamber", "rumble", "elimination"}
+
+        # Parse optional runner-up only if applicable
+        ru_val = None
+        runner_up_id = (runner_up_id or "").strip()
+        if allow_runner_up and runner_up_id.isdigit():
+            ru_id = int(runner_up_id)
+            wr = conn.execute("SELECT id FROM wrestlers WHERE id = ? AND gender = ?", (ru_id, c["gender"]))
+            if not wr.fetchone():
+                raise HTTPException(status_code=400, detail="Runner-up must be a wrestler of the correct gender")
+            if ru_id == champion_id:
+                raise HTTPException(status_code=400, detail="Runner-up must be different from the Champion")
+            ru_val = ru_id
+
+        # Upsert champion + optional runner-up for the season
         conn.execute(
-            "REPLACE INTO championship_seasons(championship_id, season, champion_id) VALUES (?,?,?)",
-            (cid, season, champion_id),
+            """
+            INSERT INTO championship_seasons(championship_id, season, champion_id, runner_up_id)
+            VALUES (?,?,?,?)
+            ON CONFLICT(championship_id, season)
+            DO UPDATE SET champion_id = excluded.champion_id, runner_up_id = excluded.runner_up_id
+            """,
+            (cid, season, champion_id, ru_val),
         )
         conn.commit()
     finally:
@@ -1603,8 +1700,15 @@ async def championship_set_season(cid: int, champion_id: int = Form(...), season
     return RedirectResponse(url=f"/championship/{cid}", status_code=303)
 
 
+# Paste this EXACT block in app.py **right under** the existing
+# `@app.post("/championship/{cid}/season/set", include_in_schema=False)` handler.
+# If you already have a function with the SAME decorator, REPLACE it with this one.
+
 @app.post("/championship/{cid}/season/delete", include_in_schema=False)
-async def championship_delete_season(cid: int, season: int = Form(...)):
+async def championship_delete_season_post(
+    cid: int,
+    season: int = Form(...),
+):
     conn = get_conn()
     try:
         conn.execute(
@@ -1617,13 +1721,37 @@ async def championship_delete_season(cid: int, season: int = Form(...)):
     return RedirectResponse(url=f"/championship/{cid}", status_code=303)
 
 
+# 2) OPTIONAL: add a GET alias for delete (helps if a browser or extension fires a GET)
+# Find your existing POST delete:
+# @app.post("/championship/{cid}/season/delete", include_in_schema=False)
+# ...leave it AS-IS...
+# Then add this exact GET handler BELOW it (uses the same SQL):
+
+@app.get("/championship/{cid}/season/delete", include_in_schema=False)
+async def championship_delete_season_get(cid: int, season: int):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "DELETE FROM championship_seasons WHERE championship_id = ? AND season = ?",
+            (cid, season),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return RedirectResponse(url=f"/championship/{cid}", status_code=303)
+
+
+
+
+# REPLACE these two handlers
+
 @app.post("/championship/{cid}/reigns/start", include_in_schema=False)
 async def championship_start_reign(
     cid: int,
     champion_id: int = Form(...),
-    won_on: str = Form(""),
+    season_won: int = Form(...),
+    champ_number: Optional[int] = Form(None),
 ):
-    won_on = (won_on or "").strip() or date.today().isoformat()
     conn = get_conn()
     try:
         c = conn.execute("SELECT gender, mode FROM championships WHERE id = ?", (cid,)).fetchone()
@@ -1642,14 +1770,25 @@ async def championship_start_reign(
         if open_r:
             raise HTTPException(status_code=400, detail="There is already an active reign")
 
+        if not champ_number:
+            champ_number = _next_champ_number(conn, cid)
+        # We keep won_on as a text marker so the column is non-null; use season tag
+        won_marker = f"S{season_won}"
         conn.execute(
-            "INSERT INTO championship_reigns(championship_id, champion_id, won_on, defences) VALUES (?,?,?,0)",
-            (cid, champion_id, won_on),
+            """
+            INSERT INTO championship_reigns(championship_id, champion_id, won_on, lost_on, defences, season_won, champ_number)
+            VALUES (?,?,?,?,0,?,?)
+            """,
+            (cid, champion_id, won_marker, None, season_won, champ_number),
         )
         conn.commit()
     finally:
         conn.close()
     return RedirectResponse(url=f"/championship/{cid}", status_code=303)
+
+
+
+
 
 
 @app.post("/championship/{cid}/reigns/increment", include_in_schema=False)
@@ -1669,13 +1808,14 @@ async def championship_increment_defences(cid: int):
 
 
 @app.post("/championship/{cid}/reigns/end", include_in_schema=False)
-async def championship_end_reign(cid: int, lost_on: str = Form("")):
-    lost_on = (lost_on or "").strip() or date.today().isoformat()
+async def championship_end_reign(cid: int, lost_season: int = Form(...)):
+    # mark current reign closed; we store a season marker instead of a real date
+    lost_marker = f"S{lost_season}"
     conn = get_conn()
     try:
         cur = conn.execute(
             "UPDATE championship_reigns SET lost_on = ? WHERE championship_id = ? AND lost_on IS NULL",
-            (lost_on, cid),
+            (lost_marker, cid),
         )
         if cur.rowcount == 0:
             raise HTTPException(status_code=400, detail="No active reign to end")
