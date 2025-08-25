@@ -94,6 +94,9 @@ def _us_defense_count(conn: sqlite3.Connection, wid: int, season: int, title_nam
 def wrestler_highlights_db(wid: int, season: int | None = 1) -> list[str]:
     conn = get_conn()
     try:
+        # Ensure tables exist before querying (avoids OperationalError on fresh DBs)
+        ensure_highlights_schema(conn)
+
         if season is None:
             rows = conn.execute(
                 """
@@ -117,7 +120,6 @@ def wrestler_highlights_db(wid: int, season: int | None = 1) -> list[str]:
                 (wid, season),
             ).fetchall()
 
-        # Group seasons by label first
         by_label: dict[str, list[int]] = {}
         for r in rows:
             by_label.setdefault(r["label"], []).append(int(r["season"]))
@@ -126,7 +128,6 @@ def wrestler_highlights_db(wid: int, season: int | None = 1) -> list[str]:
         for label, seasons in by_label.items():
             uniq = sorted(set(seasons))
             if label in US_LABELS:
-                # For US Title, render one line per season so we can append defenses
                 title_name = US_LABELS[label]
                 for s in uniq:
                     d = _us_defense_count(conn, wid, s, title_name)
@@ -138,17 +139,17 @@ def wrestler_highlights_db(wid: int, season: int | None = 1) -> list[str]:
                 count = len(uniq)
                 s_repr = f"Season {uniq[0]}" if count == 1 else f"Seasons {', '.join(str(x) for x in uniq)}"
                 out.append(f"{count} x {label} ({s_repr})")
-
         return sorted(out)
     finally:
         conn.close()
-# === /US Title defense counts ==============================================
 
-# === DB-backed Team Highlights reader =======================================
 
 def team_highlights_db(tid: int, season: int | None = None) -> list[str]:
     conn = get_conn()
     try:
+        # Ensure tables exist before querying (avoids OperationalError on fresh DBs)
+        ensure_highlights_schema(conn)
+
         if season is None:
             rows = conn.execute(
                 """
@@ -171,9 +172,11 @@ def team_highlights_db(tid: int, season: int | None = None) -> list[str]:
                 """,
                 (tid, season),
             ).fetchall()
+
         by_label: dict[str, list[int]] = {}
         for r in rows:
             by_label.setdefault(r["label"], []).append(int(r["season"]))
+
         out: list[str] = []
         for label, seasons in by_label.items():
             uniq = sorted(set(seasons))
@@ -183,6 +186,7 @@ def team_highlights_db(tid: int, season: int | None = None) -> list[str]:
         return sorted(out)
     finally:
         conn.close()
+
 
 # Register for Jinja
 try:
