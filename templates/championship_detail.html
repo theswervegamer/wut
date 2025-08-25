@@ -2,81 +2,132 @@
 {% block content %}
   <h2>{{ champ.name }}</h2>
 
-  <style>
-    .meta { color: var(--muted); }
-    .belt { width: 320px; height: 180px; object-fit: contain; border:1px solid var(--line); border-radius:12px; background:#111; }
-    table { width:100%; border-collapse:collapse; margin-top:8px; }
-    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
-  </style>
+  <table>
+    <tbody>
+      <tr>
+        <th style="width:140px">Mode</th>
+        <td>{{ champ.mode }}</td>
+      </tr>
+      <tr>
+        <th>Gender</th>
+        <td>{{ champ.gender }}</td>
+      </tr>
+      <tr>
+        <th>Stipulation</th>
+        <td>{{ champ.stipulation or '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <p class="meta">Gender: {{ champ.gender }} | Stipulation: {{ champ.stipulation }} | Mode: {{ champ.mode }}</p>
-
-  {% if champ.photo %}
-    <img class="belt" src="{{ champ.photo }}" alt="{{ champ.name }} belt">
-  {% endif %}
+  <p style="margin-top:12px">
+    <a class="btn" href="/championships">Back to list</a>
+    <a class="btn" href="/championships/edit/{{ champ.id }}">Edit championship</a>
+  </p>
 
   {% if champ.mode == 'Seasonal' %}
-    {% set st = (champ.stipulation or '')|lower %}
-    {% set show_ru = st not in ['royal rumble','elimination chamber','rumble','elimination'] %}
 
-    <h3>Champions by Season</h3>
-    {% if seasonal_rows %}
+
+    <script>
+      function togglePickers(){
+        var type = document.getElementById('champion_type').value;
+        var isTeam = type === 'team';
+        document.getElementById('pick_wrestler').style.display = isTeam ? 'none' : '';
+        document.getElementById('pick_team').style.display     = isTeam ? '' : 'none';
+        var ruW = document.getElementById('ru_wrestler');
+        var ruT = document.getElementById('ru_team');
+        if(ruW && ruT){
+          ruW.style.display = isTeam ? 'none' : '';
+          ruT.style.display = isTeam ? '' : 'none';
+        }
+      }
+      document.addEventListener('DOMContentLoaded', togglePickers);
+    </script>
+
+    <h3 style="margin-top:24px; margin-bottom:8px;">Seasons</h3>
+    {% if not seasonal_rows %}
+      <p class="muted">No seasons recorded yet.</p>
+    {% else %}
       <table>
-        {% if show_ru %}
-          <thead><tr><th>Season</th><th>Champion</th><th>Runner-up</th></tr></thead>
-          <tbody>
-            {% for r in seasonal_rows %}
-              <tr>
-                <td>S{{ r.season }}</td>
-                <td>{{ r.champion }}</td>
-                <td>{{ r.runner_up or '—' }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        {% else %}
-          <thead><tr><th>Season</th><th>Champion</th></tr></thead>
-          <tbody>
-            {% for r in seasonal_rows %}
-              <tr>
-                <td>S{{ r.season }}</td>
-                <td>{{ r.champion }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        {% endif %}
+        <thead>
+          <tr>
+            <th style="width:6rem;">Season</th>
+            <th>Champion</th>
+            <th>Runner-up</th>
+            <th style="width:1%;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in seasonal_rows %}
+            <tr>
+              <td>S{{ r.season }}</td>
+              <td>{{ r.champion or '—' }}</td>
+              <td>{{ r.runner_up or '—' }}</td>
+              <td>
+                <form class="inline-form" method="post" action="/championship/{{ champ.id }}/season/delete">
+                  <input type="hidden" name="season" value="{{ r.season }}" />
+                  <button class="btn btn-small btn-danger" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
       </table>
-    {% else %}
-      <p class="meta">No seasons recorded yet.</p>
-    {% endif %}
-  {% else %}
-    <h3>Current Reign</h3>
-    {% if current_reign %}
-      <p>
-        <strong>{{ current_reign["champion"] }}</strong>
-        <span class="meta">(Champ #{{ current_reign["champ_number"] }}; S{{ current_reign["season_won"] }})</span><br>
-        <span class="meta">Successful Defences: {{ current_reign["defences"] }}</span>
-      </p>
-    {% else %}
-      <p class="meta">No active reign.</p>
     {% endif %}
 
-    <h3>Past Reigns</h3>
-    {% if reign_rows %}
+  {% else %}
+    <h3 style="margin-top:24px; margin-bottom:8px;">Ongoing title</h3>
+    {% if not current_reign %}
+      <form class="filters" method="post" action="/championship/{{ champ.id }}/reigns/start">
+        <label>Champion
+          <select name="champion_id">
+            {% for w in wrestlers %}
+              <option value="{{ w.id }}">{{ w.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Season won
+          <input type="number" name="season_won" min="1" value="{{ season }}" />
+        </label>
+        <label>Champion #
+          <input type="number" name="champ_number" min="1" value="1" />
+        </label>
+        <button class="btn" type="submit">Start reign</button>
+      </form>
+    {% else %}
       <table>
-        <thead><tr><th>#</th><th>Champion</th><th>Season Won</th><th>Defences</th></tr></thead>
+        <tbody>
+          <tr><th>Champion</th><td>{{ current_reign.champion }}</td></tr>
+          <tr><th>Season won</th><td>S{{ current_reign.season_won }}</td></tr>
+          <tr><th>Champion #</th><td>{{ current_reign.champ_number }}</td></tr>
+          <tr><th>Successful defences</th><td>{{ current_reign.defences }}</td></tr>
+        </tbody>
+      </table>
+      <form class="filters" method="post" action="/championship/{{ champ.id }}/reigns/increment">
+        <button class="btn" type="submit">+1 Defence</button>
+      </form>
+      <form class="filters" method="post" action="/championship/{{ champ.id }}/reigns/end">
+        <label>Lost on (season marker)
+          <input type="text" name="lost_on" placeholder="S{{ season }}" />
+        </label>
+        <button class="btn btn-danger" type="submit">End reign</button>
+      </form>
+    {% endif %}
+
+    {% if reign_rows %}
+      <h3 style="margin-top:24px; margin-bottom:8px;">Past reigns</h3>
+      <table>
+        <thead><tr><th>Champion</th><th>Season won</th><th>#</th><th>Defences</th></tr></thead>
         <tbody>
           {% for r in reign_rows %}
             <tr>
-              <td>{{ r.champ_number or '-' }}</td>
               <td>{{ r.champion }}</td>
-              <td>S{{ r.season_won or '-' }}</td>
+              <td>S{{ r.season_won }}</td>
+              <td>{{ r.champ_number }}</td>
               <td>{{ r.defences }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
-    {% else %}
-      <p class="meta">No past reigns yet.</p>
     {% endif %}
   {% endif %}
 {% endblock %}

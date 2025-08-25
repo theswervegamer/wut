@@ -1,78 +1,71 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Match History</h1>
 
-  <form method="get" action="/matches" style="display:grid; gap:0.5rem; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items:end; margin-bottom:1rem;">
-    <label>
-      <div>Season</div>
-      <select name="season">
-        <option value="">All</option>
-        {% for s in seasons %}
-          <option value="{{ s }}" {% if selected.season==s %}selected{% endif %}>S{{ s }}</option>
-        {% endfor %}
-      </select>
-    </label>
+<!-- Make this page use almost full width and keep key cells on one line -->
+<style>:root { --content-w: clamp(1200px, 95vw, 1480px); }</style>
 
-    <label>
-      <div>Tournament</div>
-      <select name="tournament">
-        <option value="">All</option>
-        {% for t in tournaments %}
-          <option value="{{ t }}" {% if selected.tournament==t %}selected{% endif %}>{{ t }}</option>
-        {% endfor %}
-      </select>
-    </label>
+<h2>Match History</h2>
 
-    <label>
-      <div>Competitor (name contains)</div>
-      <input type="text" name="competitor" value="{{ selected.competitor }}" placeholder="e.g. Cena or The Usos" />
-    </label>
+<form method="get" class="filters">
+  <label>
+    Season
+    <select name="season" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for s in seasons %}
+        <option value="{{ s }}" {% if selected.season == s %}selected{% endif %}>S{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
 
-    <div>
-      <button type="submit">Filter</button>
-      <a href="/matches" style="margin-left:0.5rem;">Reset</a>
-    </div>
-  </form>
+  <label>
+    Tournament
+    <select name="tournament" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for t in tournaments %}
+        <option value="{{ t }}" {% if selected.tournament|lower == t|lower %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
 
-  {% if selected.wid %}
-    <p>Filtering for wrestler ID: <code>{{ selected.wid }}</code></p>
-  {% endif %}
+  <label>
+    Competitor (name contains)
+    <input type="text" name="competitor" value="{{ selected.competitor }}" placeholder="e.g. Cena or The Usos" />
+  </label>
+  <button class="btn btn-small" type="submit">Filter</button>
+  <a class="btn btn-small" href="/matches">Reset</a>
+</form>
 
-  {% if matches|length == 0 %}
-    <p>No matches found.</p>
-  {% else %}
-    <table border="1" cellpadding="6" cellspacing="0" style="width:100%; border-collapse:collapse;">
-      <thead>
+{% if not matches %}
+  <p class="muted">No matches found.</p>
+{% else %}
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6rem;">Season</th>
+        <th>Tournament</th>
+        <th>Round</th>
+        <th>Stipulation</th>
+        <th>Match</th>
+        <th>Result</th>
+        <th style="width:5rem;">Time</th>
+        <th style="width:1%;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in matches %}
         <tr>
-          <th style="width:5rem;">Season</th>
-          <th>Tournament</th>
-          <th>Round</th>
-          <th>Competitor 1</th>
-          <th>Competitor 2</th>
-          <th>Winner</th>
-          <th>Time</th>
+          <td>S{{ m.season }}</td>
+          <td>{{ m.tournament }}</td>
+          <td class="round-col">{{ m.round }}</td>
+          <td>{{ m.stipulation or '—' }}</td>
+          <td class="match-col">{{ m.match_display_html | safe }}</td>
+          <td class="nowrap"><strong>{{ m.result_display_html | safe }}</strong></td>
+          <td>{{ m.match_time_display }}</td>
+          <td><a class="btn btn-small" href="/matches/edit/{{ m.id }}">Edit</a></td>
         </tr>
-      </thead>
-      <tbody>
-        {% for m in matches %}
-          {% set winner_name = (m.comp1_name if m.winner_side==1 else (m.comp2_name if m.winner_side==2 else '—')) %}
-          <tr>
-            <td>S{{ m.season }}</td>
-            <td>{{ m.tournament }}</td>
-            <td>{{ m.round }}</td>
-            <td>
-              {{ m.comp1_name }}
-              <small>({{ m.comp1_kind }})</small>
-            </td>
-            <td>
-              {{ m.comp2_name }}
-              <small>({{ m.comp2_kind }})</small>
-            </td>
-            <td><strong>{{ winner_name }}</strong></td>
-            <td>{{ m.match_time_display or '—' }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
 {% endblock %}

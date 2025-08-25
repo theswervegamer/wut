@@ -7,104 +7,121 @@
 
     <style>
       :root {
-        /* Regular grid settings */
-        --champ-cols-desktop: 4;  /* regular grid cols */
+        /* Grid */
+        --champ-cols-desktop: 4;
         --champ-cols-tablet: 2;
         --champ-gap: 16px;
         --champ-pad: 12px;
         --champ-radius: 16px;
         --champ-min-h: 140px;
-        --belt-w: 250px;         /* regular tile belt w/h */
+        --belt-w: 250px;
         --belt-h: 140px;
-        --face-size: 140px;      /* regular tile face size */
-        --face-zoom: 1.6;       /* 1.0–1.5; top-anchored in .champ-face */
+        --face-size: 140px;  /* regular single portrait size */
+        --face-zoom: 1.6;
+        --media-gap: 24px;   /* space between champ photo(s) and belt */
       }
 
-      /* Page width & left anchor */
-      main { max-width: 1500px; margin-left: 70px; margin-right: auto; }
-      @media (min-width:1600px){ main { max-width: 1800px; } }
+      /* Page width (kept from your version) */
+      main { max-width: 1600px; margin-left: 70px; margin-right: auto; }
+      @media (min-width:1700px){ main { max-width: 1900px; } }
 
-      /* --- Featured row (top 2) --- */
+      /* Featured row (kept) */
       .featured {
-        /* Make each featured card bigger and with larger media */
-        --champ-min-h: 280px;   /* was 140 */
-        --champ-pad: 16px;      /* more padding */
-        --belt-w: 300px;        /* adjust to taste */
-        --belt-h: 200px;        /* keep ~1.7:1 ratio */
-        --face-size: 200px;     /* champ headshot box */
-        --face-zoom: 1.6;      /* zoom is top-anchored */
+        --champ-min-h: 220px;
+        --champ-pad: 16px;
+        --belt-w: 300px;
+        --belt-h: 200px;
+        --face-size: 200px;  /* larger portraits on featured */
+        --face-zoom: 1.6;
       }
       .featured .title { font-size: 1.06rem; }
 
-      /* Fixed-width featured cards centered (so they don't span entire row) */
       .featured-grid {
         display:grid; gap:var(--champ-gap);
-        grid-template-columns: repeat(2, minmax(360px, 560px));
-        justify-content:center;
-        margin-bottom: 12px;
+        grid-template-columns: repeat(3, minmax(560px, 760px));
+        justify-content:center; margin-bottom:12px;
       }
-      @media (max-width: 1200px) {
-        .featured-grid { grid-template-columns: minmax(320px, 560px); }
-      }
+      @media (max-width: 1500px) { .featured-grid { grid-template-columns: minmax(320px, 560px); } }
 
-      /* --- Regular grid --- */
+      /* Regular grid */
       .champ-grid { display:grid; gap:var(--champ-gap); }
       @media (min-width: 1024px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-desktop), 1fr); } }
       @media (min-width: 640px) and (max-width: 1023.98px) { .champ-grid { grid-template-columns: repeat(var(--champ-cols-tablet), 1fr); } }
       @media (max-width: 639.98px) { .champ-grid { grid-template-columns: 1fr; } }
 
-      /* --- Card + media styles (shared) --- */
-      .champ-card {
-        border:1px solid var(--line); background:#0b0b0b; border-radius:var(--champ-radius);
-        padding:var(--champ-pad); display:flex; flex-direction:column; gap:12px; min-height:var(--champ-min-h);
-      }
-      .link-card { text-decoration:none; color:inherit; display:block; cursor:pointer; }
-      .link-card:hover { background: var(--tab-hover); }
-      .link-card:focus-visible { outline:2px solid #3a3a3a; outline-offset:2px; }
-
+      /* Card */
+      .champ-card { border:1px solid var(--line); background:#0b0b0b; border-radius:var(--champ-radius); padding:var(--champ-pad); display:flex; flex-direction:column; gap:12px; min-height:var(--champ-min-h); }
+      .champ-card:hover { background: var(--tab-hover); }
       .title { font-weight:800; letter-spacing:.2px; }
+      .card-head { text-align:center; }
 
-      .img-row { display:flex; gap:12px; align-items:center; justify-content:space-between; }
+      /* Center the media row */
+      .img-row { display:flex; gap:var(--media-gap); align-items:center; justify-content:center; flex-wrap:wrap; }
       .left, .right { display:flex; align-items:center; justify-content:center; }
 
-      /* Belt: rectangular, show full belt incl. sideplates */
+      /* Make just the media clickable */
+      .media-link { display:inline-block; }
+
+      /* Belt */
       .belt { width:var(--belt-w); height:var(--belt-h); object-fit:contain; background:#111; border-radius:12px; border:1px solid var(--line); }
       .belt-ph { width:var(--belt-w); height:var(--belt-h); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.8rem; }
 
-      /* Champ: clip box + zoom, anchored to top so heads don’t crop */
+      /* Singles portrait */
       .face-clip { width:var(--face-size); height:var(--face-size); border-radius:12px; border:1px solid var(--line); overflow:hidden; background:#111; }
       .champ-face { width:100%; height:100%; object-fit:cover; object-position:50% 0%; transform:scale(var(--face-zoom)); transform-origin:50% 0%; display:block; }
       .champ-face-ph { width:var(--face-size); height:var(--face-size); border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:.75rem; }
 
-      /* Small screens: stack */
+      /* TEAM portrait: large overlapping rectangles */
+      .champ-duo { position:relative; width:calc(var(--face-size) + 40px); height:var(--face-size); }
+      .champ-duo .duo { position:absolute; top:0; height:100%; width:72%; object-fit:cover; object-position:50% 0%; border-radius:12px; border:1px solid var(--line); box-shadow:0 8px 16px rgba(0,0,0,.35); }
+      .champ-duo .left  { left:0; z-index:2; }
+      .champ-duo .right { right:0; transform:translateX(8%); }
+
+      /* Mobile tweak */
       @media (max-width: 420px) { .img-row { flex-wrap:wrap; justify-content:center; gap:10px; } }
     </style>
 
     {% if featured and featured|length > 0 %}
       <div class="featured-grid">
         {% for c in featured %}
-          <a href="/championship/{{ c.id }}" class="champ-card link-card featured">
-            <div>
+          <div class="champ-card featured">
+            <div class="card-head">
               <div class="title">{{ c.name }}</div>
-              <div>Champion: {{ c.champion }}</div>
+              <div>Champion: {{ c.champion or c.champ_name or '—' }}</div>
             </div>
             <div class="img-row">
               <div class="left">
-                {% if c.champ_photo %}
-                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/></div>
+                {% if c.champ_href %}
+                  <a class="media-link" href="{{ c.champ_href }}" aria-label="Open champion profile">
+                {% endif %}
+                {# TEAM: big dual portraits; fallbacks #}
+                {% if c.champ_photos and c.champ_photos|length >= 2 %}
+                  <div class="champ-duo">
+                    <img class="duo left"  src="{{ c.champ_photos[0] }}" alt="Champion member 1" />
+                    <img class="duo right" src="{{ c.champ_photos[1] }}" alt="Champion member 2" />
+                  </div>
+                {% elif c.champ_photos and c.champ_photos|length == 1 %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photos[0] }}" alt="Champion member"/></div>
+                {% elif c.champ_photo %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="Champion photo"/></div>
                 {% else %}
                   <div class="champ-face-ph">No photo</div>
                 {% endif %}
-              </div>
-              <div class="right">
-                {% if c.belt_photo %}
-                  <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
-                {% else %}
-                  <div class="belt-ph">No belt</div>
+                {% if c.champ_href %}
+                  </a>
                 {% endif %}
               </div>
+              <div class="right">
+                <a class="media-link" href="/championship/{{ c.id }}" aria-label="Open championship profile">
+                  {% if c.belt_photo or c.photo %}
+                    <img class="belt" src="{{ c.belt_photo or c.photo }}" alt="{{ c.name }} belt"/>
+                  {% else %}
+                    <div class="belt-ph">No belt</div>
+                  {% endif %}
+                </a>
+              </div>
             </div>
-          </a>
+          </div>
         {% endfor %}
       </div>
     {% endif %}
@@ -112,28 +129,43 @@
     {% if champs %}
       <div class="champ-grid">
         {% for c in champs %}
-          <a href="/championship/{{ c.id }}" class="champ-card link-card">
-            <div>
+          <div class="champ-card">
+            <div class="card-head">
               <div class="title">{{ c.name }}</div>
-              <div>Champion: {{ c.champion }}</div>
+              <div>Champion: {{ c.champion or c.champ_name or '—' }}</div>
             </div>
             <div class="img-row">
               <div class="left">
-                {% if c.champ_photo %}
-                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="{{ c.champion }} photo"/></div>
+                {% if c.champ_href %}
+                  <a class="media-link" href="{{ c.champ_href }}" aria-label="Open champion profile">
+                {% endif %}
+                {% if c.champ_photos and c.champ_photos|length >= 2 %}
+                  <div class="champ-duo">
+                    <img class="duo left"  src="{{ c.champ_photos[0] }}" alt="Champion member 1" />
+                    <img class="duo right" src="{{ c.champ_photos[1] }}" alt="Champion member 2" />
+                  </div>
+                {% elif c.champ_photos and c.champ_photos|length == 1 %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photos[0] }}" alt="Champion member"/></div>
+                {% elif c.champ_photo %}
+                  <div class="face-clip"><img class="champ-face" src="{{ c.champ_photo }}" alt="Champion photo"/></div>
                 {% else %}
                   <div class="champ-face-ph">No photo</div>
                 {% endif %}
-              </div>
-              <div class="right">
-                {% if c.belt_photo %}
-                  <img class="belt" src="{{ c.belt_photo }}" alt="{{ c.name }} belt"/>
-                {% else %}
-                  <div class="belt-ph">No belt</div>
+                {% if c.champ_href %}
+                  </a>
                 {% endif %}
               </div>
+              <div class="right">
+                <a class="media-link" href="/championship/{{ c.id }}" aria-label="Open championship profile">
+                  {% if c.belt_photo or c.photo %}
+                    <img class="belt" src="{{ c.belt_photo or c.photo }}" alt="{{ c.name }} belt"/>
+                  {% else %}
+                    <div class="belt-ph">No belt</div>
+                  {% endif %}
+                </a>
+              </div>
             </div>
-          </a>
+          </div>
         {% endfor %}
       </div>
     {% endif %}

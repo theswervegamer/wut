@@ -1,22 +1,27 @@
 {
   "featured": [
     "Womens World Championship",
-    "Mens World Championship"
+    "Mens World Championship",
+           "Tag Team World Championship"
   ],
   "order": [
-    "Womens Underground Championship",
-    "Tag Team World Championship",
-    "Mens Underground Championship",
-    "Mens Hardcore Championship",
 
+      
     "Womens Royal Rumble Champion",
-    "Womens Elimination Chamber Champion",
-    "Mens Elimination Chamber Champion",
+    "Womens Underground Championship",
+      "Mens Underground Championship",
     "Mens Royal Rumble Champion",
 
-    "Womens NXT Championship",
-    "Mens NXT Championship",
+        "Womens Hardcore Championship",
+    "Womens Elimination Chamber Champion",
+    "Mens Elimination Chamber Champion",
+    "Mens Hardcore Championship",
+
+
+ "Womens NXT Championship",
+    
     "Womens US Championship",
-    "Mens US Championship"
+    "Mens US Championship",
+    "Mens NXT Championship"
   ]
 }

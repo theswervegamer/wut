@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Highlights Status</h1>
+<p class="muted">Rows currently stored in <code>wrestler_highlights</code> and recent watermarks.</p>
+
+<h3>Stored rows by season</h3>
+<table>
+  <thead>
+    <tr>
+      <th style="width:8rem;">Season</th>
+      <th>Rows</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.season }}</td>
+        <td>{{ r.c }}</td>
+      </tr>
+    {% endfor %}
+    {% if not rows %}
+      <tr><td colspan="2" class="muted">No rows yet.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<h3 style="margin-top:16px;">Recent watermarks</h3>
+<table>
+  <thead>
+    <tr>
+      <th style="width:8rem;">Season</th>
+      <th style="width:8rem;">Last Day</th>
+      <th style="width:10rem;">Last Order</th>
+      <th style="width:10rem;">Last Match ID</th>
+      <th>Ran At</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for w in watermarks %}
+      <tr>
+        <td>{{ w.season or '—' }}</td>
+        <td>{{ w.last_day if w.last_day is not none else '—' }}</td>
+        <td>{{ w.last_order if w.last_order is not none else '—' }}</td>
+        <td>{{ w.last_match_id or '—' }}</td>
+        <td>{{ w.ran_at }}</td>
+      </tr>
+    {% endfor %}
+    {% if not watermarks %}
+      <tr><td colspan="5" class="muted">No watermarks recorded yet.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Edit Match #{{ m.id }}</h2>
+
+  <table>
+    <tbody>
+      <tr>
+        <th style="width:140px">Season</th>
+        <td>S{{ m.season }}</td>
+      </tr>
+      <tr>
+        <th>Tournament</th>
+        <td>{{ m.tournament }}</td>
+      </tr>
+      <tr>
+        <th>Round</th>
+        <td>{{ m.round }}</td>
+      </tr>
+      <tr>
+        <th>Match</th>
+        <td>{{ side1_label }} <span class="muted">vs</span> {{ side2_label }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <form method="post" action="/matches/edit/{{ m.id }}" class="card" style="padding:12px; border:1px solid var(--line); border-radius:12px; margin-top:12px;">
+    <div class="filters">
+      <label>
+        Season
+        <input type="number" name="season" min="1" value="{{ m.season }}" />
+      </label>
+
+      <label>
+        Tournament
+        <input type="text" name="tournament" value="{{ m.tournament }}" />
+      </label>
+
+      <label>
+        Round
+        <input type="text" name="round" value="{{ m.round }}" />
+      </label>
+
+      <label>
+        Winner
+        <select name="winner_side">
+          <option value="" {% if not m.winner_side %}selected{% endif %}>—</option>
+          <option value="1" {% if m.winner_side == 1 %}selected{% endif %}>{{ side1_label }}</option>
+          <option value="2" {% if m.winner_side == 2 %}selected{% endif %}>{{ side2_label }}</option>
+        </select>
+      </label>
+
+      <label>
+        Time (MM:SS)
+        <input type="text" name="time_mmss" placeholder="MM:SS" value="{{ display_time }}" />
+      </label>
+
+      <label>
+        Day index
+        <input type="number" name="day_index" min="1" value="{{ m.day_index or '' }}" />
+      </label>
+
+      <label>
+        Order in day
+        <input type="number" name="order_in_day" min="1" value="{{ m.order_in_day or '' }}" />
+      </label>
+
+      <button class="btn" type="submit">Save</button>
+      <a class="btn" href="/matches">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

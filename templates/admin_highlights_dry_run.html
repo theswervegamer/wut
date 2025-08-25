@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Highlights Dry‑Run (All families)</h1>
+
+<form method="get" action="/admin/highlights/dry-run" style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+  <label>Season:
+    <select name="season">
+      <option value="" {% if not season %}selected{% endif %}>All</option>
+      {% for s in seasons %}
+        <option value="{{ s }}" {% if season is not none and s == season %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn" type="submit">Run</button>
+</form>
+
+{% if unchanged %}
+  <div class="notice" style="border:1px solid var(--line); padding:8px; border-radius:8px; margin-bottom:12px;">
+    No changes since last watermark for Season {{ season }}.
+  </div>
+{% endif %}
+
+{% if persisted %}
+  <div class="notice" style="border:1px solid var(--line); padding:8px; border-radius:8px; margin-bottom:12px;">
+    Persisted {{ added }} rows for Season {{ season }}.
+  </div>
+{% endif %}
+
+{% if totals and totals|length %}
+  <h3 style="margin-top:0;">Totals</h3>
+  <ul>
+    {% for label, count in totals.items() %}
+      <li>{{ label }} — <strong>{{ count }}</strong></li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+{% if not results %}
+  <p class="muted">No highlights found for the selected range.</p>
+{% else %}
+  <form method="post" action="/admin/highlights/persist-all" style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
+    <input type="hidden" name="season" value="{{ season or '' }}" />
+    <button class="btn" type="submit" {% if not season %}disabled title="Select a season above to persist"{% endif %}>Persist for selected season</button>
+  </form>
+  <form method="post" action="/admin/highlights/persist-incremental" style="margin:0 0 12px 0;">
+    <input type="hidden" name="season" value="{{ season or '' }}" />
+    <button class="btn" type="submit" {% if not season %}disabled title="Select a season above to persist incrementally"{% endif %}>Incremental persist (season)</button>
+  </form>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6rem;">Wrestler ID</th>
+        <th>Wrestler</th>
+        <th>Highlights</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for wid, labels in results|dictsort(by='key') %}
+        <tr>
+          <td>{{ wid }}</td>
+          <td>{{ names.get(wid, '—') }}</td>
+          <td class="match-col">{{ ", ".join(labels) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

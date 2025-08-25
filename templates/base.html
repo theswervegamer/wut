@@ -22,7 +22,8 @@
   .btn-small { padding:6px 10px; font-size: 0.9rem; }
   .btn-danger { border-color: var(--danger); background: #2a0f0f; }
   .btn-danger:hover { background: #3a1515; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+ main { max-width: var(--content-w, 960px); margin: 0 auto; padding: 24px 16px; }
+ .nowrap { white-space: nowrap; }
   h2 { margin: 0 0 8px; font-weight: 800; }
   .muted { color: var(--muted); }
   table { width:100%; border-collapse:collapse; margin-top:12px; }
@@ -53,6 +54,33 @@
   }
 </style>
 
+
+<style>
+  /* Keep the Round column on a single line */
+  .round-col { white-space: nowrap; }
+</style>
+
+
+<style>
+  :root { --match-col-width: 44ch; }
+
+  /* Global: never wrap table headers/cells */
+  table th, table td { white-space: nowrap; }
+
+  /* Exception: participants column should wrap naturally */
+  .match-col {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    max-width: var(--match-col-width);
+  }
+
+  @media (max-width: 700px) {
+    :root { --match-col-width: 30ch; }
+  }
+</style>
+
+
+
   </head>
   <body>
     <header class="header">
@@ -66,6 +94,9 @@
       <a class="tab {% if active == 'factions' %}active{% endif %}" href="/factions">Factions</a>
       <a class="tab {% if active == 'champs' %}active{% endif %}" href="/championships">Championships</a>
       <a class="tab {% if active == 'matches' %}active{% endif %}" href="/matches">Matches</a>
+      <a href="/admin" class="btn">Admin</a>
+
+
 
     </nav>
 

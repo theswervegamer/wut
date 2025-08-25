@@ -28,7 +28,7 @@
       <tbody>
         {% for t in teams %}
           <tr>
-            <td>{{ t.name }}</td>
+            <td><a class="plain-link" href="/team/{{ t.id }}">{{ t.name }}</a></td>
             <td>{{ t.members }}</td>
             <td>{{ 'Yes' if t.active else 'No' }}</td>
             <td>

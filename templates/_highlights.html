@@ -1,0 +1,16 @@
+
+<div class="kw-highlights" style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:transparent;">
+  <div style="font-weight:600;margin-bottom:6px;">2kw Highlights</div>
+  {% if highlights and highlights|length > 0 %}
+    <ul style="margin:0;padding-left:18px;">
+      {% for line in highlights %}
+        <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="muted">No highlights yet.</div>
+  {% endif %}
+</div>
+
+
+

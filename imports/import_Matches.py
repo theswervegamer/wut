@@ -1,19 +1,25 @@
-# /imports/import_matches.py (v3)
+# /imports/import_matches_v2.py
 """
-CSV importer for match history with **Day** timeline.
+Import v2: two CSVs linked by a human-friendly Key.
 
 Usage (from project root):
-  python imports/import_matches.py data/matches.csv --dry-run
-  python imports/import_matches.py data/matches.csv
+  python imports/import_matches_v2.py data/matches.csv data/participants.csv --dry-run
+  python imports/import_matches_v2.py data/matches.csv data/participants.csv
 
-Required columns (case-insensitive):
-  Season, Tournament, Round, Day, Wrestler/team 1, Wrestler/team 2, Winner, Match Time
-Optional:
-  Comp1 Type, Comp2 Type
+CSV A: matches.csv (headers, case-insensitive)
+  Key,Season,Day,Tournament,Round,Stipulation,Result,Winner Side,Match Time
+    - Result: win|draw|nc  (win requires Winner Side)
+    - Match Time: MM:SS (stored as seconds)
 
-Notes:
-  - Time must be MM:SS (never past an hour).
-  - Day = universe day number (1 = first ever show in S1). Use the same Day for matches on the same show.
+CSV B: participants.csv (headers)
+  Key,Side,Wrestler
+    - Side: integer >=1; for tag, both team members use same Side number
+    - Wrestler: exact name in roster (case-insensitive)
+
+Import rules:
+  - Validates that Winner Side exists among participants when Result=win
+  - Validates that each participant wrestler name resolves to an id
+  - Idempotency: this script does not dedupe previously inserted Keys; running twice will duplicate records
 """
 from __future__ import annotations
 
@@ -22,7 +28,7 @@ import csv
 import os
 import sqlite3
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict
+from typing import Dict, Tuple, List, Optional
 
 DB_PATH = os.path.join("data", "wut.db")
 
@@ -31,11 +37,12 @@ def connect_db() -> sqlite3.Connection:
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 
-def ensure_matches_schema(conn: sqlite3.Connection) -> None:
-    # Keep in sync with app.py ensure_matches_schema. order_in_day column (if present) is ignored.
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    # Keep aligned with app schema; minimal definitions to avoid import errors
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS matches (
@@ -43,215 +50,208 @@ def ensure_matches_schema(conn: sqlite3.Connection) -> None:
             season INTEGER NOT NULL,
             tournament TEXT NOT NULL,
             round TEXT NOT NULL,
-            comp1_kind TEXT NOT NULL CHECK (comp1_kind IN ('Wrestler','Team')),
-            comp1_id INTEGER NOT NULL,
-            comp1_name TEXT NOT NULL,
-            comp2_kind TEXT NOT NULL CHECK (comp2_kind IN ('Wrestler','Team')),
-            comp2_id INTEGER NOT NULL,
-            comp2_name TEXT NOT NULL,
-            winner_side INTEGER NULL CHECK (winner_side IN (1,2)),
+            comp1_kind TEXT NULL CHECK (comp1_kind IN ('Wrestler','Team')),
+            comp1_id INTEGER NULL,
+            comp1_name TEXT NULL,
+            comp2_kind TEXT NULL CHECK (comp2_kind IN ('Wrestler','Team')),
+            comp2_id INTEGER NULL,
+            comp2_name TEXT NULL,
+            winner_side INTEGER NULL CHECK (winner_side >= 1),
+            result TEXT DEFAULT 'win' CHECK (result IN ('win','draw','nc')),
+            stipulation TEXT NULL,
             match_time_seconds INTEGER NULL,
             day_index INTEGER NULL,
-            order_in_day INTEGER NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         """
     )
-    cols = {row[1] for row in conn.execute("PRAGMA table_info('matches')").fetchall()}
-    if 'day_index' not in cols:
-        conn.execute("ALTER TABLE matches ADD COLUMN day_index INTEGER")
-    if 'order_in_day' not in cols:
-        conn.execute("ALTER TABLE matches ADD COLUMN order_in_day INTEGER")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_season ON matches(season);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_comp_ids ON matches(comp1_id, comp2_id);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_day ON matches(day_index, order_in_day);")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS match_participants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_id INTEGER NOT NULL,
+            side INTEGER NOT NULL,
+            wrestler_id INTEGER NOT NULL,
+            UNIQUE(match_id, side, wrestler_id),
+            FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
+            FOREIGN KEY (wrestler_id) REFERENCES wrestlers(id)
+        );
+        """
+    )
     conn.commit()
 
 
 @dataclass
-class Competitor:
-    kind: str  # "Wrestler" | "Team"
-    id: int
-    name: str
+class MatchRow:
+    key: str
+    season: int
+    day: int
+    tournament: str
+    round: str
+    stipulation: Optional[str]
+    result: str  # win|draw|nc
+    winner_side: Optional[int]
+    time_seconds: Optional[int]
 
 
-def parse_season(value: str) -> int:
-    v = value.strip()
-    if v.lower().startswith("s"):
-        v = v[1:]
-    return int(v)
+def parse_season(v: str) -> int:
+    v = v.strip()
+    return int(v[1:]) if v.lower().startswith("s") else int(v)
 
 
-def parse_time_mmss(value: str) -> Optional[int]:
-    v = (value or "").strip()
+def parse_time_mmss(v: str) -> Optional[int]:
+    v = (v or "").strip()
     if not v:
         return None
     parts = v.split(":")
     if len(parts) != 2:
-        raise ValueError(f"Time must be MM:SS, got {value!r}")
-    m, s = parts
-    m = int(m)
-    s = int(s)
+        raise ValueError(f"Time must be MM:SS, got {v!r}")
+    m, s = int(parts[0]), int(parts[1])
     if not (0 <= m <= 59 and 0 <= s <= 59):
-        raise ValueError(f"Time out of range (MM and SS must be 0..59): {value!r}")
+        raise ValueError(f"Time out of range: {v!r}")
     return m * 60 + s
 
 
-def lookup_competitor(conn: sqlite3.Connection, name: str, explicit_kind: Optional[str]) -> Competitor:
-    name_norm = name.strip()
-    if not name_norm:
-        raise ValueError("Empty competitor name")
-
-    wr = conn.execute(
-        "SELECT id, name FROM wrestlers WHERE LOWER(name) = LOWER(?)",
-        (name_norm,),
-    ).fetchone()
-    tr = conn.execute(
-        "SELECT id, name FROM tag_teams WHERE LOWER(name) = LOWER(?)",
-        (name_norm,),
-    ).fetchone()
-
-    if wr and tr:
-        if not explicit_kind:
-            raise ValueError(
-                f"Ambiguous name {name!r}: exists as Wrestler and Team. Provide Comp Type column."
-            )
-        chosen = explicit_kind.capitalize()
-        if chosen not in ("Wrestler", "Team"):
-            raise ValueError(f"Invalid explicit kind {explicit_kind!r} for {name!r}")
-        return Competitor(chosen, int((wr if chosen == 'Wrestler' else tr)["id"]), (wr if chosen == 'Wrestler' else tr)["name"])
-
-    if wr:
-        return Competitor("Wrestler", int(wr["id"]), wr["name"])
-    if tr:
-        return Competitor("Team", int(tr["id"]), tr["name"])
-    raise ValueError(f"Unknown competitor name: {name!r}")
-
-
-def resolve_winner(winner_value: str, c1: Competitor, c2: Competitor) -> Optional[int]:
-    v = (winner_value or "").strip()
-    if not v:
-        return None
-    if v in ("1", "2"):
-        return int(v)
-    v_low = v.lower()
-    if v_low == c1.name.lower():
-        return 1
-    if v_low == c2.name.lower():
-        return 2
-    if v_low in ("comp1", "c1", "side1"):
-        return 1
-    if v_low in ("comp2", "c2", "side2"):
-        return 2
-    raise ValueError(f"Winner value {winner_value!r} doesn't match competitor names")
+def read_matches_csv(path: str) -> Dict[str, MatchRow]:
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        required = {"key", "season", "day", "tournament", "round", "stipulation", "result", "winner side", "match time"}
+        low = [h.lower() for h in reader.fieldnames or []]
+        missing = [h for h in required if h not in low]
+        if missing:
+            raise KeyError(f"Missing columns in matches.csv: {missing}")
+        rows: Dict[str, MatchRow] = {}
+        for raw in reader:
+            d = {k.lower(): v for k, v in raw.items()}
+            key = d["key"].strip()
+            if not key:
+                raise ValueError("Empty Key in matches.csv")
+            season = parse_season(d["season"]) 
+            day = int(d["day"]) 
+            if day < 1:
+                raise ValueError(f"Day must be >=1 for Key {key}")
+            tournament = d["tournament"].strip()
+            round_ = d["round"].strip()
+            stip = d.get("stipulation", "").strip() or None
+            result = d["result"].strip().lower()
+            if result not in ("win", "draw", "nc"):
+                raise ValueError(f"Invalid Result for Key {key}: {result!r}")
+            ws = d.get("winner side", "").strip()
+            winner_side = int(ws) if ws else None
+            if result == "win" and not winner_side:
+                raise ValueError(f"Winner Side required when Result=win (Key {key})")
+            tsec = parse_time_mmss(d.get("match time", ""))
+            rows[key] = MatchRow(key, season, day, tournament, round_, stip, result, winner_side, tsec)
+        return rows
 
 
-def detect_headers(header_row: list[str]) -> Dict[str, int]:
-    norm = {h.strip().lower(): i for i, h in enumerate(header_row)}
-    def idx(*aliases: str) -> int:
-        for a in aliases:
-            if a in norm:
-                return norm[a]
-        raise KeyError(f"Missing required column; tried aliases: {aliases}")
-
-    return {
-        "season": idx("season"),
-        "tournament": idx("tournament"),
-        "round": idx("round"),
-        "comp1": idx("wrestler/team 1", "competitor 1", "comp1", "wrestler 1", "team 1"),
-        "comp2": idx("wrestler/team 2", "competitor 2", "comp2", "wrestler 2", "team 2"),
-        "winner": idx("winner", "result"),
-        "time": idx("match time", "time"),
-        "day": idx("day", "timeline day", "universe day"),
-        "comp1_type": norm.get("comp1 type", norm.get("competitor 1 type", -1)),
-        "comp2_type": norm.get("comp2 type", norm.get("competitor 2 type", -1)),
-    }
+def lookup_wrestler_id(conn: sqlite3.Connection, name: str) -> int:
+    r = conn.execute("SELECT id FROM wrestlers WHERE LOWER(name) = LOWER(?)", (name.strip(),)).fetchone()
+    if not r:
+        raise ValueError(f"Unknown wrestler name: {name!r}")
+    return int(r[0])
 
 
-def import_csv(path: str, dry_run: bool = False, delimiter: str = ",", encoding: str = "utf-8") -> Tuple[int, int]:
-    if not os.path.exists(path):
-        raise FileNotFoundError(path)
+def read_participants_csv(path: str) -> List[Tuple[str, int, str]]:
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        required = {"key", "side", "wrestler"}
+        low = [h.lower() for h in reader.fieldnames or []]
+        missing = [h for h in required if h not in low]
+        if missing:
+            raise KeyError(f"Missing columns in participants.csv: {missing}")
+        out: List[Tuple[str, int, str]] = []
+        for raw in reader:
+            d = {k.lower(): v for k, v in raw.items()}
+            key = d["key"].strip()
+            side = int(d["side"]) if d["side"].strip() else 0
+            if side < 1:
+                raise ValueError(f"Side must be >=1 for Key {key}")
+            wrestler = d["wrestler"].strip()
+            if not key or not wrestler:
+                raise ValueError("Key/Wrestler cannot be empty in participants.csv")
+            out.append((key, side, wrestler))
+        return out
 
-    with open(path, "r", encoding=encoding, newline="") as f, connect_db() as conn:
-        ensure_matches_schema(conn)
-        reader = csv.reader(f, delimiter=delimiter)
-        header = next(reader)
-        headers = detect_headers(header)
 
-        inserted = 0
-        rownum = 1
-        for row in reader:
-            rownum += 1
-            if not row or all(not c.strip() for c in row):
+def import_all(matches_csv: str, participants_csv: str, dry_run: bool = False) -> Tuple[int, int]:
+    matches = read_matches_csv(matches_csv)
+    parts = read_participants_csv(participants_csv)
+
+    with connect_db() as conn:
+        ensure_schema(conn)
+
+        # Insert matches first, map Key->id
+        key_to_id: Dict[str, int] = {}
+        inserted_matches = 0
+        for key, mr in matches.items():
+            if dry_run:
+                print(f"DRY-RUN: MATCH {key}: S{mr.season} Day {mr.day} | {mr.tournament} / {mr.round} | {mr.stipulation or '-'} | {mr.result} ws={mr.winner_side} | t={mr.time_seconds}")
                 continue
-            try:
-                season = parse_season(row[headers["season"]])
-                tournament = row[headers["tournament"]].strip()
-                rnd = row[headers["round"]].strip()
+            cur = conn.execute(
+                """
+                INSERT INTO matches (season, tournament, round, winner_side, result, stipulation, match_time_seconds, day_index)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (mr.season, mr.tournament, mr.round, mr.winner_side, mr.result, mr.stipulation, mr.time_seconds, mr.day),
+            )
+            key_to_id[key] = int(cur.lastrowid)
+            inserted_matches += 1
 
-                comp1_name_in = row[headers["comp1"]].strip()
-                comp2_name_in = row[headers["comp2"]].strip()
+        # If dry-run, we still need fake IDs to validate participant refs
+        if dry_run:
+            fake_id = 1
+            for key in matches.keys():
+                key_to_id[key] = fake_id; fake_id += 1
 
-                comp1_type_in = row[headers["comp1_type"]].strip() if headers["comp1_type"] != -1 else None
-                comp2_type_in = row[headers["comp2_type"]].strip() if headers["comp2_type"] != -1 else None
+        # Validate winner side existence (only if not dry-run with fake ids)
+        # We'll validate after loading participants per key
+        inserted_parts = 0
+        # Group participants by key
+        from collections import defaultdict
+        by_key: Dict[str, Dict[int, List[int]]] = defaultdict(lambda: defaultdict(list))
+        for key, side, wname in parts:
+            wid = lookup_wrestler_id(conn, wname)
+            by_key[key][side].append(wid)
 
-                c1 = lookup_competitor(conn, comp1_name_in, comp1_type_in)
-                c2 = lookup_competitor(conn, comp2_name_in, comp2_type_in)
+        # Now write participants and validate winner side
+        for key, sides in by_key.items():
+            if key not in key_to_id:
+                raise ValueError(f"participants.csv references unknown Key: {key}")
+            mr = matches[key]
+            if mr.result == 'win' and (mr.winner_side or 0) not in sides:
+                raise ValueError(f"Key {key}: Winner Side {mr.winner_side} has no participants")
 
-                winner_val = row[headers["winner"]]
-                winner_side = resolve_winner(winner_val, c1, c2)
+            match_id = key_to_id[key]
+            for side, wids in sides.items():
+                for wid in wids:
+                    if dry_run:
+                        print(f"DRY-RUN: PART {key}: match_id=? side={side} wrestler_id={wid}")
+                    else:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO match_participants (match_id, side, wrestler_id) VALUES (?, ?, ?)",
+                            (match_id, side, wid),
+                        )
+                        inserted_parts += 1
 
-                time_seconds = parse_time_mmss(row[headers["time"]])
-                day_index = int(row[headers["day"]])
-                if day_index < 1:
-                    raise ValueError("Day must be >= 1")
-
-                if dry_run:
-                    print(
-                        f"DRY-RUN row {rownum}: Day {day_index} | S{season} | {tournament} | {rnd} | "
-                        f"{c1.kind}:{c1.name} vs {c2.kind}:{c2.name} | winner_side={winner_side} | time={time_seconds}"
-                    )
-                else:
-                    conn.execute(
-                        """
-                        INSERT INTO matches (
-                            season, tournament, round,
-                            comp1_kind, comp1_id, comp1_name,
-                            comp2_kind, comp2_id, comp2_name,
-                            winner_side, match_time_seconds,
-                            day_index
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            season, tournament, rnd,
-                            c1.kind, c1.id, c1.name,
-                            c2.kind, c2.id, c2.name,
-                            winner_side, time_seconds,
-                            day_index,
-                        ),
-                    )
-                    inserted += 1
-            except Exception as e:
-                raise RuntimeError(f"Error on CSV row {rownum}: {e}") from e
         if not dry_run:
             conn.commit()
-        return rownum - 1, inserted
+
+        return inserted_matches, inserted_parts
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Import match history CSV into SQLite matches table")
-    p.add_argument("csv_path", help="Path to CSV file")
-    p.add_argument("--dry-run", action="store_true", help="Validate and show inserts without writing")
-    p.add_argument("--delimiter", default=",", help="CSV delimiter (default: ,)")
-    p.add_argument("--encoding", default="utf-8", help="CSV encoding (default: utf-8)")
-
+    p = argparse.ArgumentParser(description="Import matches v2 (matches.csv + participants.csv)")
+    p.add_argument("matches_csv")
+    p.add_argument("participants_csv")
+    p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
-    total, inserted = import_csv(args.csv_path, dry_run=args.dry_run, delimiter=args.delimiter, encoding=args.encoding)
+
+    m, pcount = import_all(args.matches_csv, args.participants_csv, dry_run=args.dry_run)
     if args.dry_run:
-        print(f"Checked {total} rows. 0 inserted (dry-run).")
+        print(f"Checked matches and participants. 0 rows inserted (dry-run).")
     else:
-        print(f"Processed {total} rows. Inserted {inserted} matches.")
+        print(f"Inserted: {m} matches, {pcount} participants.")
 
 
 if __name__ == "__main__":

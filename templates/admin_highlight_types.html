@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Highlight Types</h1>
+<p class="muted">Total: {{ total }}</p>
+<table>
+  <thead>
+    <tr>
+      <th style="width:5rem;">ID</th>
+      <th>Code</th>
+      <th>Label</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td class="nowrap">{{ r.code }}</td>
+      <td>{{ r.label }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
