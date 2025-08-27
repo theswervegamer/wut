@@ -8,7 +8,7 @@
   {% if wrestler.photo %}
     <img src="{{ wrestler.photo }}" alt="{{ wrestler.name }} photo" class="profile-photo" />
     <div>
-      {% set highlights = wrestler_highlights_db(wrestler.id, 1) %}
+      {% set highlights = wrestler_highlights_db(wrestler.id, None) %}
       {% include "_highlights.html" %}
     </div>
   {% else %}

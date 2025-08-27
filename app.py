@@ -3393,11 +3393,11 @@ def _side_to_team_id(conn: sqlite3.Connection, wrestler_ids: Set[int]) -> int | 
     row = conn.execute(
         f"""
         SELECT tm.team_id
-        FROM team_members tm
+        FROM tag_team_members tm
         WHERE tm.wrestler_id IN ({placeholders})
         GROUP BY tm.team_id
         HAVING COUNT(DISTINCT tm.wrestler_id) = ?
-           AND (SELECT COUNT(*) FROM team_members tm2 WHERE tm2.team_id = tm.team_id) = ?
+           AND (SELECT COUNT(*) FROM tag_team_members tm2 WHERE tm2.team_id = tm.team_id) = ?
         LIMIT 1
         """,
         (*map(int, wrestler_ids), size, size),

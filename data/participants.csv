@@ -1,63 +1,29 @@
 Key,Side,Wrestler
-S2-D101-MNXT-R1-M01,1,Eddy Thorpe
-S2-D101-MNXT-R1-M01,2,Axiom
-S2-D101-MNXT-R1-M02,1,Dominik Mysterio
-S2-D101-MNXT-R1-M02,2,Nathan Frazer
-S2-D101-MNXT-R1-M03,1,Ashante "Thee" Adonis
-S2-D101-MNXT-R1-M03,2,Carlito
-S2-D101-MNXT-R1-M04,1,Cedric Alexander
-S2-D101-MNXT-R1-M04,2,Edris Enofe
-S2-D101-MNXT-R1-M05,1,Charlie Dempsey
-S2-D101-MNXT-R1-M05,2,Oro Mensah
-S2-D101-MNXT-R1-M06,1,Duke Hudson
-S2-D101-MNXT-R1-M06,2,Pat McAfee
-S2-D101-MNXT-R1-M07,1,Cruz Del Toro
-S2-D101-MNXT-R1-M07,2,Josh Briggs
-S2-D101-MNXT-R1-M08,1,Joe Coffey
-S2-D101-MNXT-R1-M08,2,Apollo Crews
-S2-D101-MNXT-R1-M09,1,Giovanni Vinci
-S2-D101-MNXT-R1-M09,2,Angel Garza
-S2-D101-MNXT-R1-M10,1,R-Truth
-S2-D101-MNXT-R1-M10,2,Lexis King
-S2-D101-MNXT-R1-M11,1,Myles Borne
-S2-D101-MNXT-R1-M11,2,Ridge Holland
-S2-D101-MNXT-R1-M12,1,Noam Dar
-S2-D101-MNXT-R1-M12,2,Luca Crusifino
-S2-D101-MNXT-R1-M13,1,Andre Chase
-S2-D101-MNXT-R1-M13,2,Joaquin Wilde
-S2-D101-MNXT-R1-M14,1,Tony D'Angelo
-S2-D101-MNXT-R1-M14,2,Malik Blade
-S2-D101-MNXT-R1-M15,1,Uriah Connors
-S2-D101-MNXT-R1-M15,2,Shawn Spears
-S2-D101-MNXT-R1-M16,1,Grayson Waller
-S2-D101-MNXT-R1-M16,2,Tyson Dupont
-S2-D110-MNXT-R2-M01,1,Josh Briggs
-S2-D110-MNXT-R2-M01,2,Dominik Mysterio
-S2-D110-MNXT-R2-M02,1,Ashante "Thee" Adonis
-S2-D110-MNXT-R2-M02,2,Tony D'Angelo
-S2-D110-MNXT-R2-M03,1,R-Truth
-S2-D110-MNXT-R2-M03,2,Giovanni Vinci
-S2-D110-MNXT-R2-M04,1,Grayson Waller
-S2-D110-MNXT-R2-M04,2,Charlie Dempsey
-S2-D110-MNXT-R2-M05,1,Joe Coffey
-S2-D110-MNXT-R2-M05,2,Eddy Thorpe
-S2-D110-MNXT-R2-M06,1,Ridge Holland
-S2-D110-MNXT-R2-M06,2,Noam Dar
-S2-D110-MNXT-R2-M07,1,Pat McAfee
-S2-D110-MNXT-R2-M07,2,Cedric Alexander
-S2-D110-MNXT-R2-M08,1,Shawn Spears
-S2-D110-MNXT-R2-M08,2,Andre Chase
-S2-D130-MNXT-QF-M01,1,Tony D'Angelo
-S2-D130-MNXT-QF-M01,2,Grayson Waller
-S2-D130-MNXT-QF-M02,1,Dominik Mysterio
-S2-D130-MNXT-QF-M02,2,Pat McAfee
-S2-D130-MNXT-QF-M03,1,Shawn Spears
-S2-D130-MNXT-QF-M03,2,Joe Coffey
-S2-D130-MNXT-QF-M04,1,Giovanni Vinci
-S2-D130-MNXT-QF-M04,2,Noam Dar
-S2-D140-MNXT-SF-M01,1,Dominik Mysterio
-S2-D140-MNXT-SF-M01,2,Giovanni Vinci
-S2-D140-MNXT-SF-M02,1,Tony D'Angelo
-S2-D140-MNXT-SF-M02,2,Shawn Spears
-S2-D170-MNXT-F-M01,1,Giovanni Vinci
-S2-D170-MNXT-F-M01,2,Shawn Spears
+S3-D250-MUC-R1-M01,1,Aleister Black
+S3-D250-MUC-R1-M01,2,John Cena
+S3-D250-MUC-R1-M02,1,Bryan Danielson
+S3-D250-MUC-R1-M02,2,Jacob Fatu
+S3-D250-MUC-R1-M03,1,Brock Lesnar
+S3-D250-MUC-R1-M03,2,Roman Reigns
+S3-D250-MUC-R1-M04,1,Johnny Gargano
+S3-D250-MUC-R1-M04,2,Samoa Joe
+S3-D260-MUC-SF-M01,1,Johnny Gargano
+S3-D260-MUC-SF-M01,2,Aleister Black
+S3-D260-MUC-SF-M02,1,Brock Lesnar
+S3-D260-MUC-SF-M02,2,Bryan Danielson
+S3-D270-MUC-F-M01,1,Johnny Gargano
+S3-D270-MUC-F-M01,2,Brock Lesnar
+S3-D250-WUC-R1-M01,1,Iyo Sky
+S3-D250-WUC-R1-M01,2,Jaida Parker
+S3-D250-WUC-R1-M02,1,Lyra Valkyria
+S3-D250-WUC-R1-M02,2,Raquel Rodriguez
+S3-D250-WUC-R1-M03,1,Britt Baker
+S3-D250-WUC-R1-M03,2,Zoey Stark
+S3-D250-WUC-R1-M04,1,Alexa Bliss
+S3-D250-WUC-R1-M04,2,Fallon Henley
+S3-D260-WUC-SF-M01,1,Britt Baker
+S3-D260-WUC-SF-M01,2,Alexa Bliss
+S3-D260-WUC-SF-M02,1,Iyo Sky
+S3-D260-WUC-SF-M02,2,Lyra Valkyria
+S3-D270-WUC-F-M01,1,Iyo Sky
+S3-D270-WUC-F-M01,2,Britt Baker

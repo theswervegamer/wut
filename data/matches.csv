@@ -1,32 +1,15 @@
 Key,Season,Day,Tournament,Round,Stipulation,Result,Winner Side,Match Time
-S2-D101-MNXT-R1-M01,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M02,2,101,Mens NXT Championship,Round 1,Singles,win,1,11:00
-S2-D101-MNXT-R1-M03,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M04,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M05,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M06,2,101,Mens NXT Championship,Round 1,Singles,win,2,02:40
-S2-D101-MNXT-R1-M07,2,101,Mens NXT Championship,Round 1,Singles,win,2,
-S2-D101-MNXT-R1-M08,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M09,2,101,Mens NXT Championship,Round 1,Singles,win,1,02:00
-S2-D101-MNXT-R1-M10,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M11,2,101,Mens NXT Championship,Round 1,Singles,win,2,
-S2-D101-MNXT-R1-M12,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M13,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M14,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D101-MNXT-R1-M15,2,101,Mens NXT Championship,Round 1,Singles,win,2,
-S2-D101-MNXT-R1-M16,2,101,Mens NXT Championship,Round 1,Singles,win,1,
-S2-D110-MNXT-R2-M01,2,110,Mens NXT Championship,Round 2,Singles,win,2,06:00
-S2-D110-MNXT-R2-M02,2,110,Mens NXT Championship,Round 2,Singles,win,2,08:00
-S2-D110-MNXT-R2-M03,2,110,Mens NXT Championship,Round 2,Singles,win,2,10:50
-S2-D110-MNXT-R2-M04,2,110,Mens NXT Championship,Round 2,Singles,win,1,08:00
-S2-D110-MNXT-R2-M05,2,110,Mens NXT Championship,Round 2,Singles,win,1,09:20
-S2-D110-MNXT-R2-M06,2,110,Mens NXT Championship,Round 2,Singles,win,2,
-S2-D110-MNXT-R2-M07,2,110,Mens NXT Championship,Round 2,Singles,win,1,06:00
-S2-D110-MNXT-R2-M08,2,110,Mens NXT Championship,Round 2,Singles,win,1,05:50
-S2-D130-MNXT-QF-M01,2,130,Mens NXT Championship,Quarter Final,Singles,win,1,01:55
-S2-D130-MNXT-QF-M02,2,130,Mens NXT Championship,Quarter Final,Singles,win,1,08:50
-S2-D130-MNXT-QF-M03,2,130,Mens NXT Championship,Quarter Final,Singles,win,1,04:20
-S2-D130-MNXT-QF-M04,2,130,Mens NXT Championship,Quarter Final,Singles,win,1,06:00
-S2-D140-MNXT-SF-M01,2,140,Mens NXT Championship,Semi Final,Singles,win,2,04:40
-S2-D140-MNXT-SF-M02,2,140,Mens NXT Championship,Semi Final,Singles,win,2,09:30
-S2-D170-MNXT-F-M01,2,170,Mens NXT Championship,Final,Singles,win,2,08:00
+S3-D250-MUC-R1-M01,3,250,Mens Underground Championship,Round 1,,win,1,12:30
+S3-D250-MUC-R1-M02,3,250,Mens Underground Championship,Round 1,,win,1,07:30
+S3-D250-MUC-R1-M03,3,250,Mens Underground Championship,Round 1,,win,1,14:40
+S3-D250-MUC-R1-M04,3,250,Mens Underground Championship,Round 1,,win,1,06:00
+S3-D260-MUC-SF-M01,3,260,Mens Underground Championship,Semi Final,,win,1,06:00
+S3-D260-MUC-SF-M02,3,260,Mens Underground Championship,Semi Final,,win,1,12:00
+S3-D270-MUC-F-M01,3,270,Mens Underground Championship,Final,,win,1,05:40
+S3-D250-WUC-R1-M01,3,250,Womens Underground Championship,Round 1,,win,1,05:50
+S3-D250-WUC-R1-M02,3,250,Womens Underground Championship,Round 1,,win,1,10:00
+S3-D250-WUC-R1-M03,3,250,Womens Underground Championship,Round 1,,win,1,09:00
+S3-D250-WUC-R1-M04,3,250,Womens Underground Championship,Round 1,,win,1,08:00
+S3-D260-WUC-SF-M01,3,260,Womens Underground Championship,Semi Final,,win,1,08:40
+S3-D260-WUC-SF-M02,3,260,Womens Underground Championship,Semi Final,,win,1,19:40
+S3-D270-WUC-F-M01,3,270,Womens Underground Championship,Final,,win,1,07:45
